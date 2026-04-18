@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model DataSource {
+  id          String   @id @default(cuid())
+  type        String   // "cs_implementation" | "sales" | "user_activity"
+  fileName    String
+  filePath    String
+  uploadedAt  DateTime @default(now())
+  weekNumber  Int
+  year        Int
+  rowCount    Int
+  rawData     String   // JSON string of parsed Excel data
+}
+
+model MetricSnapshot {
+  id               String   @id @default(cuid())
+  weekNumber       Int
+  year             Int
+  weekLabel        String
+  totalOrders      Int      @default(0)
+  newOrders        Int      @default(0)
+  trainingRate     Float    @default(0)
+  complaintRate    Float    @default(0)
+  compensationRate Float    @default(0)
+  ordersPerCSM     Float    @default(0)
+  issueResolutionRate Float @default(0)
+  activityRate     Float    @default(0)
+  healthyCount     Int      @default(0)
+  attentionCount   Int      @default(0)
+  warningCount     Int      @default(0)
+  dangerCount      Int      @default(0)
+  createdAt        DateTime @default(now())
+}
+
+model WeeklyReport {
+  id         String   @id @default(cuid())
+  weekNumber Int
+  year       Int
+  title      String
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model BoardMemory {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model UnresolvedItem {
+  id          String   @id @default(cuid())
+  description String
+  status      String   @default("unknown")
+  weekNumber  Int
+  year        Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ModelConfig {
+  id          String   @id @default(cuid())
+  provider    String   @default("minimax") // "minimax" | "openai" | "custom"
+  apiKey      String
+  baseUrl     String
+  modelName   String
+  temperature Float    @default(0.3)
+  maxTokens   Int      @default(4096)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SkillConfig {
+  id         String   @id @default(cuid())
+  skillKey   String   @unique
+  skillName  String
+  enabled    Boolean  @default(true)
+  parameters String   // JSON
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String   // "user" | "assistant" | "system"
+  content   String
+  timestamp DateTime @default(now())
+}
+
+model AgentRule {
+  id          String   @id @default(cuid())
+  ruleContent String
+  category    String   @default("general") // general | analysis | report | format
+  source      String   @default("chat")    // chat | manual | system
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CSValueData {
+  id              String   @id @default(cuid())
+  weekNumber      Int
+  year            Int
+  weekLabel       String
+  csValueJSON     String   // Full CSValueDashboardData JSON
+  isDemo          Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
