@@ -248,3 +248,23 @@ Stage Summary:
 - 仓库已从私有改为公开以支持 GitHub Pages
 - z.ai 平台部署系统已确认完全失效，不再依赖
 - 静态模式下数据通过 generateRealDashboardData() 内置展示
+
+---
+Task ID: 1-2
+Agent: Main Agent
+Task: 创建 CSM 部署指南与操作手册文档
+
+Work Log:
+- 基于项目实际情况编写完整文档内容
+- 使用 docx skill 创建专业 Word 文档
+- 采用 DM-1 (Deep Cyan) 色板 + R4 封面设计
+- 包含项目概述、技术架构、三种部署方式（GitHub Pages/Vercel/自建服务器）
+- 环境变量配置详解、六大功能模块操作指南
+- 常见问题排查表、维护与更新指南
+- 运行 postcheck 通过（0 errors, 2 warnings）
+- 运行 add_toc_placeholders.py 修复 TOC
+
+Stage Summary:
+- 生成文件：/home/z/my-project/download/CSM部署指南与操作手册.docx
+- 文档包含 6 大章节，19 个标题，完整的目录
+- 涵盖部署指南和操作手册两部分内容
