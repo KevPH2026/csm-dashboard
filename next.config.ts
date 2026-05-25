@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  // Note: output: "standalone" is needed for build.sh deployment
-  // but causes issues with "next dev". Remove for dev, add back for build.
+  output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
   },
