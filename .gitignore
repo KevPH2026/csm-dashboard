@@ -52,3 +52,8 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Agent context (causes Turbopack permission errors)
+/agent-ctx/
+/download/
+/mini-services/
+/scripts/

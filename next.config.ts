@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // DO NOT add output: "standalone" — it causes 153MB+ bundles that exceed serverless limits
+  // Note: output: "standalone" is needed for build.sh deployment
+  // but causes issues with "next dev". Remove for dev, add back for build.
   typescript: {
     ignoreBuildErrors: true,
   },
