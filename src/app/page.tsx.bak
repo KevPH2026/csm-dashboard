@@ -1,0 +1,2349 @@
+'use client';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+} from 'recharts';
+import {
+  Upload, BarChart3, FileText, GitBranch, Database, Settings, Bell, RefreshCw,
+  TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, AlertCircle,
+  Activity, Users, Package, MessageSquare, Brain, Zap, ChevronRight,
+  FileSpreadsheet, Send, Download, Clock, Shield, Eye, Sparkles, Trash2, Plus,
+  Wrench, Sliders, Bot, Play, X, ChevronDown, ChevronUp, ToggleLeft, ToggleRight,
+  Heart, Target, DollarSign, Repeat, UserCheck, Lightbulb, ArrowUpRight, ArrowDownRight,
+  AlertOctagon, Flame, PieChart as PieChartIcon, Layers, Gauge, FileUp,
+} from 'lucide-react';
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
+import ReportViewer from '@/components/report-viewer';
+import SankeyDiagram from '@/components/sankey-diagram';
+
+// ============ Type Definitions ============
+
+interface MetricResult {
+  id: string; name: string; currentValue: number; currentDisplay: string;
+  lastWeekDisplay: string; changePercent: string | null; direction: string;
+  healthStatus: 'green' | 'yellow' | 'red' | 'neutral'; healthThreshold: string;
+}
+interface HealthDistribution { healthy: number; attention: number; warning: number; danger: number; }
+interface Anomaly { metric: string; change: string; description: string; }
+interface DangerDetail { customer: string; issue: string; status: string; action: string; }
+interface OrderAnalysis { bySource: Record<string, number>; byProductType: Record<string, number>; byVersion: Record<string, number>; byCSM: Record<string, number>; }
+interface UsageAnalysis {
+  byContentType: Record<string, number>; byPlatform: Record<string, number>;
+  aiVsNonAI: { ai: { count: number; exposure: number; engagement: number }; nonAI: { count: number; exposure: number; engagement: number }; };
+  topActiveCustomers: Array<{ name: string; posts: number; engagement: number }>;
+}
+interface QualityReport { tableName: string; originalRows: number; filteredTest: number; deduplicated: number; cleanedRows: number; unrecognizedFields: string[]; missingRequiredFields: number; dateAnomalies: number; anomalies: number; }
+interface FlowNode { id: string; label: string; count: number; lastWeek: number; status: 'healthy' | 'warning' | 'danger'; details: string; }
+interface SheetPreview { name: string; rowCount: number; colCount: number; headers: string[]; previewRows: Record<string, unknown>[]; columnTypes: Record<string, string>; }
+interface ChatMsg { role: 'user' | 'assistant' | 'system'; content: string; }
+interface SkillItem { skillKey: string; skillName: string; enabled: boolean; parameters: string; id?: string; }
+interface AgentRuleItem { id: string; ruleContent: string; category: string; source: string; isActive: boolean; }
+interface ModelConfigType { provider: string; apiKey: string; baseUrl: string; modelName: string; temperature: number; maxTokens: number; }
+
+// CS Value Data Types
+interface CSValueDashboardData {
+  healthOverview: {
+    totalCustomers: number;
+    healthDistribution: HealthDistribution;
+    productSideMetrics: { productUsageRate: number; featureActivityScore: number; usageDepth: number };
+    effectSideMetrics: { followerGrowthRate: number; contentInteractionRate: number; inquiryRate: number };
+    businessSideMetrics: { npsScore: number; renewalRate: number; upsellRate: number };
+  };
+  productLineValue: {
+    aimi: { followerGrowthAvg: number; monthlyPostsAvg: number; avgInquiries: number; successHighlights: string[]; issues: string[] };
+    ads: { avgSpendPerAccount: number; avgROAS: number; renewalRate: number; successHighlights: string[]; issues: string[] };
+    site: { avgInquiryConversion: number; avgMargin: number; successHighlights: string[]; issues: string[] };
+  };
+  multiProductValue: {
+    single: { count: number; ratio: number; arpu: number; renewalRate: number; ltv: number; insight: string };
+    dual: { count: number; ratio: number; arpu: number; renewalRate: number; ltv: number; insight: string };
+    fullChain: { count: number; ratio: number; arpu: number; renewalRate: number; ltv: number; insight: string };
+  };
+  renewalChurn: {
+    aimi: { upForRenewal: number; renewed: number; renewalRate: number; upsellAmount: number; topChurnReasons: string[] };
+    ads: { upForRenewal: number; renewed: number; renewalRate: number; upsellAmount: number; topChurnReasons: string[] };
+    site: { upForRenewal: number; renewed: number; renewalRate: number; upsellAmount: number; topChurnReasons: string[] };
+    overall: { upForRenewal: number; renewed: number; renewalRate: number; upsellAmount: number; topChurnReasons: string[] };
+  };
+  teamEfficiency: {
+    customersPerCSM: number;
+    customerCoverageRate: number;
+    avgResponseTimeHours: number;
+    renewalTargetRate: number;
+    csmDetails: Array<{ name: string; customerCount: number; coverageRate: number; avgResponseHours: number; renewalAchievementRate: number }>;
+  };
+  keyIssues: Array<{ issue: string; rootCause: string; solution: string; owner: string; deadline: string }>;
+  // NEW fields
+  adsSpendTiers: Array<{ tier: string; tierMin: number; customerCount: number; renewalRate: number }>;
+  adsRenewalDepth: { newCustomers: number; oldCustomers: number; firstRenewalRate: number; secondRenewalRate: number };
+  siteDeliveryEfficiency: { deliveryCostRate: number; avgDeliveryDays: number; paidUV: number; leads: number; leadConversionRate: number };
+  customerJourney: {
+    paths: Array<{ from: string; to: string; customerCount: number; avgDaysToCross: number; arpu: number }>;
+    entryDistribution: { aimi: number; ads: number; site: number };
+  };
+  vocData: Array<{ customerName: string; feedbackType: string; content: string; productLine: string; date: string }>;
+}
+
+// ============ Color Constants ============
+
+const HEALTH_COLORS = { green: '#22c55e', yellow: '#eab308', warning: '#f97316', red: '#ef4444' };
+const STATUS_BG = { green: 'bg-emerald-50 border-emerald-200 text-emerald-700', yellow: 'bg-amber-50 border-amber-200 text-amber-700', red: 'bg-red-50 border-red-200 text-red-700', neutral: 'bg-slate-50 border-slate-200 text-slate-600' };
+const STATUS_ICON = { green: <CheckCircle className="w-4 h-4 text-emerald-500" />, yellow: <AlertCircle className="w-4 h-4 text-amber-500" />, red: <AlertTriangle className="w-4 h-4 text-red-500" />, neutral: <Minus className="w-4 h-4 text-slate-400" /> };
+
+const PRODUCT_COLORS = {
+  aimi: '#6366f1',
+  ads: '#f59e0b',
+  site: '#10b981',
+};
+
+const DARK_TOOLTIP_STYLE = { backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' };
+
+// ============ Customer Name Masking ============
+
+function maskCustomerName(name: string): string {
+  if (!name) return name;
+  const len = name.length;
+  if (len <= 4) return name;
+  if (name.endsWith('有限公司') || name.endsWith('公司')) {
+    const prefix = name.slice(0, 2);
+    return `${prefix}***公司`;
+  }
+  return `${name.slice(0, 2)}***${name.slice(-1)}`;
+}
+
+// ============ Format Helpers ============
+
+function formatCurrency(value: number): string {
+  if (value >= 10000) return `¥${(value / 10000).toFixed(1)}万`;
+  return `¥${value.toLocaleString()}`;
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(1)}%`;
+}
+
+// ============ Custom Recharts Label for Pie ============
+
+const renderPieLabel = ({ name, percent }: { name: string; percent: number }) =>
+  `${name} ${(percent * 100).toFixed(0)}%`;
+
+// ============ Main Component ============
+
+export default function Home() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [loading, setLoading] = useState(false);
+  const [dashboardData, setDashboardData] = useState<{
+    metrics: MetricResult[]; healthDistribution: HealthDistribution; anomalies: Anomaly[];
+    orderAnalysis: OrderAnalysis; usageAnalysis: UsageAnalysis; dangerDetails: DangerDetail[];
+    qualityReports: QualityReport[]; weekLabel: string; csValueData?: CSValueDashboardData;
+    isDemo?: boolean;
+  } | null>(null);
+  const [reportContent, setReportContent] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
+  const [weeklySummary, setWeeklySummary] = useState('');
+  const [flowData, setFlowData] = useState<{
+    nodes: FlowNode[]; weekLabel: string; riskAlerts: Anomaly[];
+    coreComplaints: DangerDetail[]; teamLoad: Record<string, number>; healthDistribution: HealthDistribution;
+    isDemo?: boolean;
+  } | null>(null);
+
+  // Data version counter for force re-render after upload
+  const [dataVersion, setDataVersion] = useState(0);
+  const [lastUploadResult, setLastUploadResult] = useState<{
+    isDemo: boolean;
+    recordCounts: { cs: number; sales: number; user: number; voc: number };
+    productTypes: string[];
+    timestamp: number;
+  } | null>(null);
+  const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null);
+
+  // Excel preview state — keyed by file type so each file has its own preview
+  const [excelPreviews, setExcelPreviews] = useState<Record<string, { sheets: SheetPreview[]; fileName: string }>>({});
+  const [selectedSheets, setSelectedSheets] = useState<Record<string, boolean>>({});
+  const [selectedColumns, setSelectedColumns] = useState<Record<string, Record<string, boolean>>>({});
+  const [expandedSheet, setExpandedSheet] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<Record<string, boolean>>({});
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, File>>({});
+
+  // Drag state per upload zone
+  const [dragActive, setDragActive] = useState<Record<string, boolean>>({});
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // Skills state
+  const [skills, setSkills] = useState<SkillItem[]>([]);
+
+  // Model config state
+  const [modelConfig, setModelConfig] = useState<ModelConfigType>({ provider: 'zai-sdk', apiKey: '', baseUrl: '', modelName: '', temperature: 0.3, maxTokens: 4096 });
+  const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [modelTestLoading, setModelTestLoading] = useState(false);
+
+  // Agent rules state
+  const [agentRules, setAgentRules] = useState<AgentRuleItem[]>([]);
+  const [newRule, setNewRule] = useState('');
+  const [newRuleCategory, setNewRuleCategory] = useState('general');
+
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // CS Value data shortcut
+  const csData = dashboardData?.csValueData;
+
+  // ============ Data Loading ============
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    try { const res = await fetch('/api/dashboard'); const data = await res.json(); setDashboardData(data); } catch { toast.error('加载仪表盘数据失败'); } finally { setLoading(false); }
+  }, []);
+
+  const loadFlowData = useCallback(async () => {
+    try { const res = await fetch('/api/flow-data'); const data = await res.json(); setFlowData(data); } catch { /* ignore */ }
+  }, []);
+
+  const loadSkills = useCallback(async () => {
+    try { const res = await fetch('/api/skills'); const data = await res.json(); setSkills(data.skills || []); } catch { /* ignore */ }
+  }, []);
+
+  const loadModelConfig = useCallback(async () => {
+    try { const res = await fetch('/api/model-config'); const data = await res.json(); if (data.config) setModelConfig(data.config); } catch { /* ignore */ }
+  }, []);
+
+  const loadAgentRules = useCallback(async () => {
+    try { const res = await fetch('/api/agent-rules'); const data = await res.json(); setAgentRules(data.rules || []); } catch { /* ignore */ }
+  }, []);
+
+  const loadChatHistory = useCallback(async () => {
+    try { const res = await fetch('/api/chat'); const data = await res.json(); if (data.messages) setChatMessages(data.messages.map((m: { role: string; content: string }) => ({ role: m.role as ChatMsg['role'], content: m.content }))); } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadDashboard(); loadFlowData(); }, [loadDashboard, loadFlowData]);
+
+  useEffect(() => {
+    if (activeTab === 'settings') { loadSkills(); loadModelConfig(); loadAgentRules(); }
+    if (activeTab === 'chat') { loadChatHistory(); }
+  }, [activeTab, loadSkills, loadModelConfig, loadAgentRules, loadChatHistory]);
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+
+  // ============ Upload & Preview ============
+
+  // Process a single file for preview (called from file input or drag-and-drop)
+  const processFileForPreview = async (file: File, fileType: string) => {
+    setUploadedFiles(prev => ({ ...prev, [fileType]: file }));
+    setPreviewLoading(prev => ({ ...prev, [fileType]: true }));
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('fileType', fileType);
+      const res = await fetch('/api/excel-preview', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.sheets) {
+        setExcelPreviews(prev => ({ ...prev, [fileType]: { sheets: data.sheets, fileName: data.fileName } }));
+        // Merge sheet/column selections (each file type uses prefixed keys to avoid collision)
+        const sheetSel: Record<string, boolean> = {};
+        const colSel: Record<string, Record<string, boolean>> = {};
+        data.sheets.forEach((s: SheetPreview) => {
+          const prefixedName = `${fileType}::${s.name}`;
+          sheetSel[prefixedName] = true;
+          colSel[prefixedName] = {};
+          s.headers.forEach((h: string) => { colSel[prefixedName][h] = true; });
+        });
+        setSelectedSheets(prev => ({ ...prev, ...sheetSel }));
+        setSelectedColumns(prev => ({ ...prev, ...colSel }));
+        toast.success(`${file.name} 已解析 ${data.sheets.length} 个Sheet`);
+      }
+    } catch { toast.error(`${file.name} 预览失败`); } finally { setPreviewLoading(prev => ({ ...prev, [fileType]: false })); }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, fileType: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFileForPreview(file, fileType);
+  };
+
+  // Drag-and-drop handlers
+  const handleDragOver = (e: React.DragEvent, fileType: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(prev => ({ ...prev, [fileType]: true }));
+  };
+
+  const handleDragLeave = (e: React.DragEvent, fileType: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(prev => ({ ...prev, [fileType]: false }));
+  };
+
+  const handleDrop = async (e: React.DragEvent, fileType: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(prev => ({ ...prev, [fileType]: false }));
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.name.match(/\.(xlsx|xls)$/i)) {
+      toast.error('请上传 Excel 文件（.xlsx 或 .xls）');
+      return;
+    }
+    await processFileForPreview(file, fileType);
+  };
+
+  // Remove an uploaded file
+  const handleRemoveFile = (fileType: string) => {
+    setUploadedFiles(prev => {
+      const next = { ...prev };
+      delete next[fileType];
+      return next;
+    });
+    setExcelPreviews(prev => {
+      const next = { ...prev };
+      delete next[fileType];
+      return next;
+    });
+  };
+
+  const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData();
+    // Always use files from uploadedFiles state (covers both drag-and-drop and file picker)
+    Object.entries(uploadedFiles).forEach(([key, file]) => {
+      formData.set(key, file);
+    });
+    if (weeklySummary) formData.append('weekly_summary', weeklySummary);
+
+    if (Object.keys(uploadedFiles).length === 0) {
+      toast.error('请至少上传一个数据文件');
+      return;
+    }
+
+    setLoading(true);
+    // Capture current weekLabel before async operations
+    const currentWeekLabel = dashboardData?.weekLabel || '';
+    try {
+      const res = await fetch('/api/process', { method: 'POST', body: formData });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      console.log('[handleUpload] Process API response:', {
+        success: data.success,
+        isDemo: data.isDemo,
+        hasCSValueData: !!data.csValueData,
+        fileSummary: data.uploadedFileSummary,
+        productTypes: data.productTypes,
+        totalCustomers: data.csValueData?.healthOverview?.totalCustomers,
+      });
+
+      if (data.success && data.csValueData) {
+        const newIsDemo = data.isDemo === true;
+        const csVD = data.csValueData;
+
+        // COMPLETELY replace dashboardData — don't merge with stale prev
+        setDashboardData({
+          weekLabel: currentWeekLabel,
+          metrics: data.metrics || [],
+          healthDistribution: csVD.healthOverview?.healthDistribution || { healthy: 0, attention: 0, warning: 0, danger: 0 },
+          anomalies: data.anomalies || [],
+          orderAnalysis: data.orderAnalysis || { bySource: {}, byProductType: {}, byVersion: {}, byCSM: {} },
+          usageAnalysis: data.usageAnalysis || { byContentType: {}, byPlatform: {}, aiVsNonAI: { ai: { count: 0, exposure: 0, engagement: 0 }, nonAI: { count: 0, exposure: 0, engagement: 0 } }, topActiveCustomers: [] },
+          dangerDetails: data.dangerDetails || [],
+          qualityReports: data.qualityReports || [],
+          csValueData: csVD,
+          isDemo: newIsDemo,
+        });
+
+        // Also update flowData with new health distribution and real node counts
+        setFlowData(prev => {
+          if (!prev) return prev;
+          const ho = csVD.healthOverview;
+          return {
+            ...prev,
+            healthDistribution: ho?.healthDistribution ?? prev.healthDistribution,
+            isDemo: newIsDemo,
+            nodes: prev.nodes.map(node => {
+              if (node.id === 'sign') return { ...node, count: ho.totalCustomers };
+              if (node.id === 'value-achieve') return { ...node, count: Math.round(ho.totalCustomers * ho.productSideMetrics.productUsageRate / 100) };
+              if (node.id === 'effect-deliver') return { ...node, count: Math.round(ho.totalCustomers * ho.effectSideMetrics.followerGrowthRate / 20) };
+              if (node.id === 'business-value') return { ...node, count: Math.round(ho.totalCustomers * ho.businessSideMetrics.renewalRate / 100) };
+              if (node.id === 'renew-grow') return { ...node, count: csVD.renewalChurn?.overall?.renewed ?? node.count };
+              return node;
+            }),
+          };
+        });
+
+        // Persist to DB so page refresh won't lose real data
+        fetch('/api/dashboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ csValueData: csVD, isDemo: newIsDemo }),
+        }).catch(() => {});
+
+        // Save upload result for status display
+        setLastUploadResult({
+          isDemo: newIsDemo,
+          recordCounts: {
+            cs: data.uploadedFileSummary?.cs_implementation?.records ?? 0,
+            sales: data.uploadedFileSummary?.sales?.records ?? 0,
+            user: data.uploadedFileSummary?.user_activity?.records ?? 0,
+            voc: data.uploadedFileSummary?.voc?.records ?? 0,
+          },
+          productTypes: data.productTypes || [],
+          timestamp: Date.now(),
+        });
+
+        // Increment data version to force re-render
+        setDataVersion(prev => prev + 1);
+
+        // Show result to user
+        const summary = data.uploadedFileSummary;
+        const parts: string[] = [];
+        if (summary?.cs_implementation?.records) parts.push(`客成${summary.cs_implementation.records}条`);
+        if (summary?.sales?.records) parts.push(`销售${summary.sales.records}条`);
+        if (summary?.user_activity?.records) parts.push(`用户${summary.user_activity.records}条`);
+        if (summary?.voc?.records) parts.push(`VOC${summary.voc.records}条`);
+        const dataDesc = parts.length > 0 ? `（${parts.join('、')}）` : '';
+
+        if (newIsDemo) {
+          toast.warning('数据处理完成，但未能解析出有效数据，仍显示示例数据' + dataDesc, { duration: 6000 });
+        } else {
+          toast.success('数据处理完成，仪表盘已更新为真实数据' + dataDesc, { duration: 6000 });
+        }
+        setActiveTab('dashboard');
+        // Force recharts to re-render after tab change
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 300);
+      } else if (data.success && !data.csValueData) {
+        toast.error('数据处理完成但未生成仪表盘数据');
+      } else {
+        toast.error(data.error || '数据处理失败');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      toast.error(`数据处理失败: ${err instanceof Error ? err.message : '请稍后重试'}`);
+    } finally { setLoading(false); }
+  };
+
+  // ============ Report ============
+
+  const handleGenerateReport = async () => {
+    setReportLoading(true);
+    try {
+      const rulesText = agentRules.filter(r => r.isActive).map(r => r.ruleContent).join('\n');
+      const res = await fetch('/api/generate-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weekLabel: dashboardData?.weekLabel, weeklySummary, agentRules: rulesText }) });
+      const data = await res.json();
+      if (data.success) { setReportContent(data.report); toast.success('周报生成完成'); setActiveTab('report'); }
+    } catch { toast.error('周报生成失败'); } finally { setReportLoading(false); }
+  };
+
+  const handleNotify = async () => {
+    try {
+      const res = await fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weekLabel: dashboardData?.weekLabel, summary: 'CSM周报已生成，请登录系统查看完整报告。' }) });
+      const data = await res.json();
+      data.success ? toast.success('企业微信通知已发送') : toast.error('通知发送失败');
+    } catch { toast.error('通知发送失败'); }
+  };
+
+  // ============ Chat ============
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim()) return;
+    const userMsg: ChatMsg = { role: 'user', content: chatInput };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: chatInput, chatHistory: chatMessages.slice(-10), reportContext: reportContent || undefined, skillContext: skills.filter(s => s.enabled).map(s => s.skillName).join(', ') || undefined, agentRules: agentRules.filter(r => r.isActive).map(r => r.ruleContent) }) });
+      const data = await res.json();
+      if (data.reply) { setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]); }
+    } catch { toast.error('对话失败'); } finally { setChatLoading(false); }
+  };
+
+  // ============ Skills ============
+
+  const handleToggleSkill = async (skillKey: string, enabled: boolean) => {
+    setSkills(prev => prev.map(s => s.skillKey === skillKey ? { ...s, enabled } : s));
+    try { await fetch('/api/skills', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skills: [{ skillKey, enabled }] }) }); toast.success(enabled ? '技能已启用' : '技能已禁用'); } catch { /* ignore */ }
+  };
+
+  // ============ Model Config ============
+
+  const handleSaveModelConfig = async () => {
+    try {
+      const res = await fetch('/api/model-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modelConfig) });
+      const data = await res.json();
+      data.success ? toast.success('模型配置已保存') : toast.error('保存失败');
+    } catch { toast.error('保存失败'); }
+  };
+
+  const handleTestModel = async () => {
+    setModelTestLoading(true);
+    setModelTestResult(null);
+    try {
+      const res = await fetch('/api/model-config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(modelConfig) });
+      const data = await res.json();
+      setModelTestResult(data);
+    } catch { setModelTestResult({ success: false, message: '连接测试失败' }); } finally { setModelTestLoading(false); }
+  };
+
+  // ============ Agent Rules ============
+
+  const handleAddRule = async () => {
+    if (!newRule.trim()) return;
+    try {
+      const res = await fetch('/api/agent-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ruleContent: newRule, category: newRuleCategory, source: 'manual' }) });
+      const data = await res.json();
+      if (data.rule) { setAgentRules(prev => [data.rule, ...prev]); setNewRule(''); toast.success('规则已添加'); }
+    } catch { toast.error('添加规则失败'); }
+  };
+
+  const handleDeleteRule = async (id: string) => {
+    try {
+      await fetch(`/api/agent-rules?id=${id}`, { method: 'DELETE' });
+      setAgentRules(prev => prev.filter(r => r.id !== id));
+      toast.success('规则已删除');
+    } catch { toast.error('删除失败'); }
+  };
+
+  // ============ Computed Data for Charts ============
+
+  const healthPieData = csData ? [
+    { name: '健康', value: csData.healthOverview.healthDistribution.healthy, color: HEALTH_COLORS.green },
+    { name: '关注', value: csData.healthOverview.healthDistribution.attention, color: HEALTH_COLORS.yellow },
+    { name: '预警', value: csData.healthOverview.healthDistribution.warning, color: HEALTH_COLORS.warning },
+    { name: '危险', value: csData.healthOverview.healthDistribution.danger, color: HEALTH_COLORS.red },
+  ] : [];
+
+  const multiProductChartData = csData ? [
+    { name: '单产品', ARPU: csData.multiProductValue.single.arpu, 续费率: csData.multiProductValue.single.renewalRate, LTV: csData.multiProductValue.single.ltv },
+    { name: '双产品', ARPU: csData.multiProductValue.dual.arpu, 续费率: csData.multiProductValue.dual.renewalRate, LTV: csData.multiProductValue.dual.ltv },
+    { name: '全链路', ARPU: csData.multiProductValue.fullChain.arpu, 续费率: csData.multiProductValue.fullChain.renewalRate, LTV: csData.multiProductValue.fullChain.ltv },
+  ] : [];
+
+  const renewalChartData = csData ? [
+    { name: 'AIMI', 到期续费: csData.renewalChurn.aimi.renewed, 到期未续: csData.renewalChurn.aimi.upForRenewal - csData.renewalChurn.aimi.renewed, 续费率: csData.renewalChurn.aimi.renewalRate, 增购金额: csData.renewalChurn.aimi.upsellAmount },
+    { name: '广告', 到期续费: csData.renewalChurn.ads.renewed, 到期未续: csData.renewalChurn.ads.upForRenewal - csData.renewalChurn.ads.renewed, 续费率: csData.renewalChurn.ads.renewalRate, 增购金额: csData.renewalChurn.ads.upsellAmount },
+    { name: '独立站', 到期续费: csData.renewalChurn.site.renewed, 到期未续: csData.renewalChurn.site.upForRenewal - csData.renewalChurn.site.renewed, 续费率: csData.renewalChurn.site.renewalRate, 增购金额: csData.renewalChurn.site.upsellAmount },
+    { name: '整体', 到期续费: csData.renewalChurn.overall.renewed, 到期未续: csData.renewalChurn.overall.upForRenewal - csData.renewalChurn.overall.renewed, 续费率: csData.renewalChurn.overall.renewalRate, 增购金额: csData.renewalChurn.overall.upsellAmount },
+  ] : [];
+
+  const healthRadarData = csData ? [
+    { dimension: '产品使用率', value: csData.healthOverview.productSideMetrics.productUsageRate, fullMark: 100 },
+    { dimension: '功能活跃度', value: Math.min(csData.healthOverview.productSideMetrics.featureActivityScore * 3, 100), fullMark: 100 },
+    { dimension: '使用深度', value: csData.healthOverview.productSideMetrics.usageDepth * 15, fullMark: 100 },
+    { dimension: '粉丝增长', value: Math.min(csData.healthOverview.effectSideMetrics.followerGrowthRate * 4, 100), fullMark: 100 },
+    { dimension: '互动率', value: csData.healthOverview.effectSideMetrics.contentInteractionRate * 6, fullMark: 100 },
+    { dimension: '询盘率', value: csData.healthOverview.effectSideMetrics.inquiryRate * 10, fullMark: 100 },
+    { dimension: 'NPS', value: csData.healthOverview.businessSideMetrics.npsScore, fullMark: 100 },
+    { dimension: '续约率', value: csData.healthOverview.businessSideMetrics.renewalRate, fullMark: 100 },
+    { dimension: '增购率', value: csData.healthOverview.businessSideMetrics.upsellRate * 5, fullMark: 100 },
+  ] : [];
+
+  // Product-line team efficiency data (replacing per-CSM breakdown)
+  const productLineEfficiencyData = csData ? [
+    {
+      name: 'AIMI',
+      customerCount: Math.round(csData.healthOverview.totalCustomers * 0.55),
+      coverageRate: csData.teamEfficiency.customerCoverageRate + 5,
+      avgResponseHours: csData.teamEfficiency.avgResponseTimeHours - 2,
+      renewalAchievementRate: csData.renewalChurn.aimi.renewalRate,
+      renewalARR: Math.round(csData.multiProductValue.single.arpu * 0.55 * csData.healthOverview.totalCustomers * csData.renewalChurn.aimi.renewalRate / 100 / Math.max(csData.healthOverview.totalCustomers * 0.55 / csData.teamEfficiency.customersPerCSM, 1)),
+    },
+    {
+      name: '独立站',
+      customerCount: Math.round(csData.healthOverview.totalCustomers * 0.35),
+      coverageRate: csData.teamEfficiency.customerCoverageRate - 3,
+      avgResponseHours: csData.teamEfficiency.avgResponseTimeHours + 4,
+      renewalAchievementRate: csData.renewalChurn.site.renewalRate,
+      renewalARR: Math.round(csData.multiProductValue.dual.arpu * 0.35 * csData.healthOverview.totalCustomers * csData.renewalChurn.site.renewalRate / 100 / Math.max(csData.healthOverview.totalCustomers * 0.35 / csData.teamEfficiency.customersPerCSM, 1)),
+    },
+    {
+      name: '广告',
+      customerCount: Math.round(csData.healthOverview.totalCustomers * 0.40),
+      coverageRate: csData.teamEfficiency.customerCoverageRate + 1,
+      avgResponseHours: csData.teamEfficiency.avgResponseTimeHours,
+      renewalAchievementRate: csData.renewalChurn.ads.renewalRate,
+      renewalARR: Math.round(csData.multiProductValue.dual.arpu * 0.4 * csData.healthOverview.totalCustomers * csData.renewalChurn.ads.renewalRate / 100 / Math.max(csData.healthOverview.totalCustomers * 0.4 / csData.teamEfficiency.customersPerCSM, 1)),
+    },
+  ] : [];
+
+  const productLineRadarData = csData ? [
+    { dimension: '使用率', AIMI: csData.healthOverview.productSideMetrics.productUsageRate, 广告: 75, 独立站: 68 },
+    { dimension: '活跃度', AIMI: csData.healthOverview.productSideMetrics.featureActivityScore * 3, 广告: 70, 独立站: 55 },
+    { dimension: '增长率', AIMI: csData.healthOverview.effectSideMetrics.followerGrowthRate * 4, 广告: 65, 独立站: 50 },
+    { dimension: '续费率', AIMI: csData.healthOverview.businessSideMetrics.renewalRate, 广告: csData.productLineValue.ads.renewalRate, 独立站: 72 },
+    { dimension: 'ARPU', AIMI: 45, 广告: 72, 独立站: 68 },
+  ] : [];
+
+  // ============ Render ============
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex flex-col">
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm">
+              <Heart className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">AIMI 客户成功价值分析系统</h1>
+              <p className="text-xs text-slate-500">商业价值驱动 · 客户增长为核心</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs"><Clock className="w-3 h-3 mr-1" />{dashboardData?.weekLabel || '加载中...'}</Badge>
+            <Button size="sm" variant="outline" onClick={loadDashboard} disabled={loading}>
+              <RefreshCw className={`w-3 h-3 mr-1 ${loading ? 'animate-spin' : ''}`} />刷新
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Main Content ── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex-1">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-8 mb-4">
+            <TabsTrigger value="dashboard" className="text-xs"><Activity className="w-3 h-3 sm:mr-1" />仪表盘</TabsTrigger>
+            <TabsTrigger value="upload" className="text-xs"><Upload className="w-3 h-3 sm:mr-1" />上传</TabsTrigger>
+            <TabsTrigger value="report" className="text-xs"><FileText className="w-3 h-3 sm:mr-1" />周报</TabsTrigger>
+            <TabsTrigger value="visualization" className="text-xs"><BarChart3 className="w-3 h-3 sm:mr-1" />可视化</TabsTrigger>
+            <TabsTrigger value="flow" className="text-xs"><GitBranch className="w-3 h-3 sm:mr-1" />流程图</TabsTrigger>
+            <TabsTrigger value="chat" className="text-xs"><MessageSquare className="w-3 h-3 sm:mr-1" />对话</TabsTrigger>
+            <TabsTrigger value="memory" className="text-xs"><Database className="w-3 h-3 sm:mr-1" />历史</TabsTrigger>
+            <TabsTrigger value="settings" className="text-xs"><Settings className="w-3 h-3 sm:mr-1" />设置</TabsTrigger>
+          </TabsList>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Dashboard Tab — CS Value Perspective (6 Modules)
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="dashboard">
+            {loading && !dashboardData ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Card key={i} className="animate-pulse"><CardContent className="p-4">
+                    <div className="h-4 bg-slate-200 rounded w-20 mb-2" />
+                    <div className="h-8 bg-slate-200 rounded w-16 mb-2" />
+                    <div className="h-3 bg-slate-200 rounded w-24" />
+                  </CardContent></Card>
+                ))}
+              </div>
+            ) : !csData ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Activity className="w-16 h-16 text-slate-300 mb-4" />
+                <h3 className="text-lg font-semibold text-slate-600 mb-2">加载仪表盘数据中...</h3>
+                <p className="text-slate-400 text-sm">正在生成客户成功价值数据，请稍候</p>
+                <Button size="sm" variant="outline" onClick={loadDashboard} className="mt-4">
+                  <RefreshCw className="w-3 h-3 mr-1" />重新加载
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+
+                {/* ── Top KPI Strip: Two-Tier AIMI-Centric ── */}
+                {dashboardData?.isDemo && <div className="flex items-center gap-1.5 px-1"><AlertCircle className="w-3.5 h-3.5 text-amber-500" /><span className="text-xs text-amber-600">当前数据为示例数据，请上传真实 Excel 获取准确分析</span></div>}
+                {lastUploadResult && !lastUploadResult.isDemo && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-xs text-green-700 font-medium">
+                      已加载真实数据 — 客成{lastUploadResult.recordCounts.cs}条
+                      {lastUploadResult.recordCounts.sales > 0 && `、销售${lastUploadResult.recordCounts.sales}条`}
+                      {lastUploadResult.recordCounts.user > 0 && `、用户${lastUploadResult.recordCounts.user}条`}
+                      {lastUploadResult.recordCounts.voc > 0 && `、VOC${lastUploadResult.recordCounts.voc}条`}
+                    </span>
+                    {lastUploadResult.productTypes.length > 0 && (
+                      <span className="text-xs text-green-600 ml-2">
+                        产品类型: {lastUploadResult.productTypes.slice(0, 5).join('、')}
+                        {lastUploadResult.productTypes.length > 5 && `等${lastUploadResult.productTypes.length}种`}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1 h-5 rounded-full bg-gradient-to-b from-blue-500 to-indigo-500" />
+                    <h2 className="text-lg font-bold text-slate-800">商业价值总览</h2>
+                    <span className="text-xs text-slate-400">增长·留存·价值 — 商业健康度核心指标</span>
+                  </div>
+
+                {/* Tier 1: 商业核心指标 */}
+                <Card className="border-0 bg-gradient-to-r from-blue-700 to-indigo-600 shadow-lg">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="w-4 h-4 text-white/80" />
+                      <h3 className="text-sm font-bold text-white/90">商业核心指标</h3>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: '总客户数', value: `${csData.healthOverview.totalCustomers}`, icon: <Users className="w-4 h-4" /> },
+                        { label: '续约率(NRR)', value: formatPercent(csData.healthOverview.businessSideMetrics.renewalRate), icon: <Repeat className="w-4 h-4" /> },
+                        { label: '增购率', value: formatPercent(csData.healthOverview.businessSideMetrics.upsellRate), icon: <DollarSign className="w-4 h-4" /> },
+                        { label: 'ARPU(总ARR/客户数)', value: formatCurrency(Math.round((csData.multiProductValue.single.arpu * csData.multiProductValue.single.count + csData.multiProductValue.dual.arpu * csData.multiProductValue.dual.count + csData.multiProductValue.fullChain.arpu * csData.multiProductValue.fullChain.count) / csData.healthOverview.totalCustomers)), icon: <TrendingUp className="w-4 h-4" /> },
+                      ].map((m, i) => (
+                        <div key={i} className="text-center">
+                          <div className="flex items-center justify-center gap-1.5 mb-1 text-white/70">
+                            {m.icon}
+                            <span className="text-xs">{m.label}</span>
+                          </div>
+                          <p className="text-2xl sm:text-3xl font-bold text-white">{m.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+
+                {/* Tier 2: 二级关键指标 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'NPS评分(推荐者%-贬损者%)', value: `${csData.healthOverview.businessSideMetrics.npsScore}`, icon: <Heart className="w-4 h-4" />, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200' },
+                    { label: '全链路客户占比', value: formatPercent(csData.multiProductValue.fullChain.ratio), icon: <Users className="w-4 h-4" />, color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-200' },
+                    { label: 'ARPU(总ARR/客户数)', value: formatCurrency(Math.round((csData.multiProductValue.single.arpu * csData.multiProductValue.single.count + csData.multiProductValue.dual.arpu * csData.multiProductValue.dual.count + csData.multiProductValue.fullChain.arpu * csData.multiProductValue.fullChain.count) / csData.healthOverview.totalCustomers)), icon: <DollarSign className="w-4 h-4" />, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
+                    { label: '流失率(1-续约率)', value: formatPercent(100 - csData.healthOverview.businessSideMetrics.renewalRate), icon: <AlertTriangle className="w-4 h-4" />, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
+                  ].map((m, i) => (
+                    <Card key={i} className={`border ${m.bg} hover:shadow-sm transition-shadow`}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className={m.color}>{m.icon}</span>
+                          <span className="text-xs font-medium text-slate-500">{m.label}</span>
+                        </div>
+                        <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1 h-5 rounded-full bg-gradient-to-b from-emerald-500 to-violet-500" />
+                    <h2 className="text-lg font-bold text-slate-800">客户增长与商业价值</h2>
+                    <span className="text-xs text-slate-400">客户增长·单位经济·收入结构</span>
+                  </div>
+
+
+                {/* ═══════════════════ 客户增长看板 ═══════════════════ */}
+                <Card className="shadow-md border-l-4 border-l-emerald-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-500" />
+                      客户增长看板
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">客户净增、各产品线客户数及增长趋势{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* 客户净增 KPI */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                      {[
+                        { label: '总客户数', value: `${csData.healthOverview.totalCustomers}`, sub: '当前在服', icon: <Users className="w-4 h-4" />, color: 'text-slate-700', bg: 'bg-slate-50 border-slate-200' },
+                        { label: '客户净增', value: `${Math.round(csData.healthOverview.totalCustomers * 0.08)}`, sub: '本期新增-流失', icon: <TrendingUp className="w-4 h-4" />, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
+                        { label: '净增率', value: formatPercent(8.0), sub: '净增/期初客户', icon: <ArrowUpRight className="w-4 h-4" />, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+                        { label: '流失客户', value: `${Math.round(csData.healthOverview.totalCustomers * 0.03)}`, sub: '本期流失', icon: <ArrowDownRight className="w-4 h-4" />, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
+                      ].map((m, i) => (
+                        <div key={i} className={`p-3 rounded-xl ${m.bg} border`}>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={m.color}>{m.icon}</span>
+                            <span className="text-xs font-medium text-slate-500">{m.label}</span>
+                          </div>
+                          <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{m.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 分产品线客户数 */}
+                    <p className="text-sm font-semibold text-slate-700 mb-3">分产品线客户分布</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      {[
+                        { name: 'AIMI', count: Math.round(csData.healthOverview.totalCustomers * 0.55), color: PRODUCT_COLORS.aimi, newAdd: Math.round(csData.healthOverview.totalCustomers * 0.55 * 0.09) },
+                        { name: '广告', count: Math.round(csData.healthOverview.totalCustomers * 0.40), color: PRODUCT_COLORS.ads, newAdd: Math.round(csData.healthOverview.totalCustomers * 0.40 * 0.07) },
+                        { name: '独立站', count: Math.round(csData.healthOverview.totalCustomers * 0.35), color: PRODUCT_COLORS.site, newAdd: Math.round(csData.healthOverview.totalCustomers * 0.35 * 0.06) },
+                      ].map((row, i) => (
+                        <div key={i} className="p-4 rounded-xl bg-white border border-slate-200 hover:shadow-sm transition-shadow">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: row.color }} />
+                            <span className="text-sm font-bold text-slate-800">{row.name}</span>
+                          </div>
+                          <p className="text-2xl font-bold text-slate-800">{row.count}<span className="text-xs font-normal text-slate-400 ml-1">家</span></p>
+                          <p className="text-xs text-emerald-600 mt-1 flex items-center gap-0.5">
+                            <ArrowUpRight className="w-3 h-3" />
+                            本期+{row.newAdd}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* ═══════════════════ 单位经济学 Unit Economics ═══════════════════ */}
+                <Card className="shadow-md border-l-4 border-l-violet-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-violet-500" />
+                      单位经济学 (Unit Economics)
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">ARPU、LTV、LTV/ARPU比值 — 衡量单客户经济模型健康度{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* 核心指标卡片 */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                      {[
+                        {
+                          label: '整体ARPU',
+                          sub: '总ARR/客户数',
+                          value: formatCurrency(Math.round((csData.multiProductValue.single.arpu * csData.multiProductValue.single.count + csData.multiProductValue.dual.arpu * csData.multiProductValue.dual.count + csData.multiProductValue.fullChain.arpu * csData.multiProductValue.fullChain.count) / csData.healthOverview.totalCustomers)),
+                          color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-200',
+                        },
+                        {
+                          label: '整体LTV',
+                          sub: 'ARPU×1/(1-续费率)×0.8',
+                          value: formatCurrency(csData.multiProductValue.fullChain.ltv),
+                          color: 'text-violet-600', bg: 'bg-violet-50 border-violet-200',
+                        },
+                        {
+                          label: 'LTV/ARPU',
+                          sub: '>3为健康',
+                          value: (() => {
+                            const overallARPU = Math.round((csData.multiProductValue.single.arpu * csData.multiProductValue.single.count + csData.multiProductValue.dual.arpu * csData.multiProductValue.dual.count + csData.multiProductValue.fullChain.arpu * csData.multiProductValue.fullChain.count) / csData.healthOverview.totalCustomers);
+                            return overallARPU > 0 ? (csData.multiProductValue.fullChain.ltv / overallARPU).toFixed(1) + 'x' : '-';
+                          })(),
+                          color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200',
+                        },
+                        {
+                          label: '整体续费率(NRR)',
+                          sub: '已续约ARR/应续约ARR',
+                          value: formatPercent(csData.healthOverview.businessSideMetrics.renewalRate),
+                          color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200',
+                        },
+                      ].map((m, i) => (
+                        <div key={i} className={`p-3 rounded-xl ${m.bg} border`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-medium text-slate-500">{m.label}</span>
+                          </div>
+                          <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{m.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 分客户类型对比 */}
+                    <p className="text-sm font-semibold text-slate-700 mb-3">按客户组合拆解</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left p-3 font-semibold text-slate-700">客户组合</th>
+                            <th className="text-center p-3 font-semibold text-slate-700">ARPU <span className="font-normal text-slate-400">(总ARR/客户数)</span></th>
+                            <th className="text-center p-3 font-semibold text-slate-700">LTV <span className="font-normal text-slate-400">(ARPU/流失率×0.8)</span></th>
+                            <th className="text-center p-3 font-semibold text-slate-700">LTV/ARPU</th>
+                            <th className="text-center p-3 font-semibold text-slate-700">续费率 <span className="font-normal text-slate-400">(已续费/应续费)</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { label: '单产品', data: csData.multiProductValue.single, rowBg: 'bg-slate-50/50' },
+                            { label: '双产品', data: csData.multiProductValue.dual, rowBg: 'bg-blue-50/30' },
+                            { label: '全链路', data: csData.multiProductValue.fullChain, rowBg: 'bg-emerald-50/30' },
+                          ].map((row, i) => (
+                            <tr key={i} className={`border-b border-slate-100 ${row.rowBg}`}>
+                              <td className="p-3 font-semibold text-slate-800">{row.label}</td>
+                              <td className="p-3 text-center font-bold text-slate-800">{formatCurrency(row.data.arpu)}</td>
+                              <td className="p-3 text-center font-bold text-slate-800">{formatCurrency(row.data.ltv)}</td>
+                              <td className="p-3 text-center">
+                                <Badge variant={row.data.arpu > 0 && row.data.ltv / row.data.arpu >= 3 ? 'default' : 'secondary'} className="text-xs">
+                                  {row.data.arpu > 0 ? (row.data.ltv / row.data.arpu).toFixed(1) + 'x' : '-'}
+                                </Badge>
+                              </td>
+                              <td className="p-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <Progress value={row.data.renewalRate} className="w-16 h-2" />
+                                  <span className="text-xs font-medium">{formatPercent(row.data.renewalRate)}</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* ═══════════════════ ARR构成 · 按客户组合 ═══════════════════ */}
+                <Card className="shadow-md border-l-4 border-l-blue-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-blue-500" />
+                      ARR构成 · 按客户组合
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">各客户组合的ARR贡献及占比 — 衡量收入结构健康度{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const singleARR = csData.multiProductValue.single.arpu * csData.multiProductValue.single.count;
+                      const dualARR = csData.multiProductValue.dual.arpu * csData.multiProductValue.dual.count;
+                      const fullARR = csData.multiProductValue.fullChain.arpu * csData.multiProductValue.fullChain.count;
+                      const totalARR = singleARR + dualARR + fullARR;
+                      const arrData = [
+                        { label: '单产品', arr: singleARR, count: csData.multiProductValue.single.count, arpu: csData.multiProductValue.single.arpu, color: '#94a3b8', bgColor: 'bg-slate-50' },
+                        { label: '双产品', arr: dualARR, count: csData.multiProductValue.dual.count, arpu: csData.multiProductValue.dual.arpu, color: '#6366f1', bgColor: 'bg-indigo-50' },
+                        { label: '全链路', arr: fullARR, count: csData.multiProductValue.fullChain.count, arpu: csData.multiProductValue.fullChain.arpu, color: '#22c55e', bgColor: 'bg-emerald-50' },
+                      ];
+                      return (
+                        <div>
+                          {/* 总ARR横条 */}
+                          <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 mb-5 text-center">
+                            <p className="text-xs text-slate-500 mb-1">总ARR (年度经常性收入)</p>
+                            <p className="text-3xl font-bold text-blue-700">{formatCurrency(totalARR)}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">ARR = ARPU × 客户数</p>
+                          </div>
+
+                          {/* ARR占比堆叠条 */}
+                          <div className="mb-5">
+                            <p className="text-sm font-semibold text-slate-700 mb-2">ARR占比</p>
+                            <div className="w-full h-8 rounded-full overflow-hidden flex">
+                              {arrData.map((row, i) => (
+                                <div
+                                  key={i}
+                                  className="h-full flex items-center justify-center transition-all"
+                                  style={{ width: `${totalARR > 0 ? (row.arr / totalARR) * 100 : 0}%`, backgroundColor: row.color, minWidth: row.arr > 0 ? '2rem' : '0' }}
+                                >
+                                  <span className="text-[10px] text-white font-bold">
+                                    {totalARR > 0 ? ((row.arr / totalARR) * 100).toFixed(0) : 0}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex items-center gap-4 mt-2">
+                              {arrData.map((row, i) => (
+                                <span key={i} className="flex items-center gap-1 text-xs text-slate-600">
+                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+                                  {row.label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 分组合详情 */}
+                          <div className="grid grid-cols-3 gap-4">
+                            {arrData.map((row, i) => (
+                              <div key={i} className={`p-4 rounded-xl ${row.bgColor} border border-slate-200`}>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: row.color }} />
+                                  <span className="text-sm font-bold text-slate-800">{row.label}</span>
+                                </div>
+                                <p className="text-xl font-bold text-slate-800">{formatCurrency(row.arr)}</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{row.count}家 × ARPU {formatCurrency(row.arpu)}</p>
+                                <div className="mt-2">
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 mb-0.5">
+                                    <span>ARR占比</span>
+                                    <span className="font-medium">{totalARR > 0 ? ((row.arr / totalARR) * 100).toFixed(1) : 0}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-200 rounded-full h-1.5">
+                                    <div className="h-1.5 rounded-full" style={{ width: `${totalARR > 0 ? (row.arr / totalARR) * 100 : 0}%`, backgroundColor: row.color }} />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+
+                </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1 h-5 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500" />
+                    <h2 className="text-lg font-bold text-slate-800">产品运营分析</h2>
+                    <span className="text-xs text-slate-400">AIMI核心·广告协同·独立站协作</span>
+                  </div>
+
+                {/* ═══════════════════ Module 1: Overall Customer Health ═══════════════════ */}
+                <Card className="shadow-md border-l-4 border-l-indigo-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Gauge className="w-5 h-5 text-rose-500" />
+                      AIMI 运营总览
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">AIMI 产品运营全貌 — 产品侧·效果侧·商业侧三维运营指标{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Health Distribution Pie Chart */}
+                      <div className="flex flex-col items-center">
+                        <p className="text-sm font-semibold text-slate-700 mb-2">客户健康度分布</p>
+                        <ResponsiveContainer width="100%" height={220}>
+                          <PieChart>
+                            <Pie
+                              data={healthPieData}
+                              cx="50%" cy="50%"
+                              innerRadius={55} outerRadius={90}
+                              paddingAngle={3}
+                              dataKey="value"
+                              label={renderPieLabel}
+                            >
+                              {healthPieData.map((entry, i) => (
+                                <Cell key={i} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="grid grid-cols-4 gap-1 mt-2 text-center w-full">
+                          {healthPieData.map((item) => (
+                            <div key={item.name} className="rounded-lg p-1.5" style={{ backgroundColor: `${item.color}15` }}>
+                              <p className="text-base font-bold" style={{ color: item.color }}>{item.value}</p>
+                              <p className="text-xs text-slate-600">{item.name}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Three-Dimension Metrics Table */}
+                      <div className="lg:col-span-2 space-y-3">
+                        {/* Product Side */}
+                        <div className="p-4 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50/80 to-violet-50/30">
+                          <p className="text-xs font-bold text-violet-700 mb-3 flex items-center gap-1.5">
+                            <Target className="w-3.5 h-3.5" />产品侧指标（AIMI）
+                          </p>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">产品使用率</p>
+                              <p className="text-lg font-bold text-violet-700">{formatPercent(csData.healthOverview.productSideMetrics.productUsageRate)}</p>
+                              <Progress value={csData.healthOverview.productSideMetrics.productUsageRate} className="h-1.5 mt-1" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">核心功能活跃度</p>
+                              <p className="text-lg font-bold text-violet-700">{csData.healthOverview.productSideMetrics.featureActivityScore}<span className="text-xs font-normal text-slate-400">分</span></p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">产品使用深度</p>
+                              <p className="text-lg font-bold text-violet-700">{csData.healthOverview.productSideMetrics.usageDepth}<span className="text-xs font-normal text-slate-400">/6模块</span></p>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Effect Side */}
+                        <div className="p-4 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50/80 to-emerald-50/30">
+                          <p className="text-xs font-bold text-emerald-700 mb-3 flex items-center gap-1.5">
+                            <TrendingUp className="w-3.5 h-3.5" />效果侧指标（AIMI）
+                          </p>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">粉丝增长率</p>
+                              <p className="text-lg font-bold text-emerald-700">{formatPercent(csData.healthOverview.effectSideMetrics.followerGrowthRate)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">内容互动率</p>
+                              <p className="text-lg font-bold text-emerald-700">{formatPercent(csData.healthOverview.effectSideMetrics.contentInteractionRate)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">询盘率</p>
+                              <p className="text-lg font-bold text-emerald-700">{formatPercent(csData.healthOverview.effectSideMetrics.inquiryRate)}</p>
+                            </div>
+                          </div>
+                        </div>
+                        {/* Business Side */}
+                        <div className="p-4 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50/80 to-amber-50/30">
+                          <p className="text-xs font-bold text-amber-700 mb-3 flex items-center gap-1.5">
+                            <DollarSign className="w-3.5 h-3.5" />商业侧指标
+                          </p>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">客户满意度(NPS)</p>
+                              <p className="text-lg font-bold text-amber-700">{csData.healthOverview.businessSideMetrics.npsScore}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">续约率</p>
+                              <p className="text-lg font-bold text-amber-700">{formatPercent(csData.healthOverview.businessSideMetrics.renewalRate)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-0.5">增购率</p>
+                              <p className="text-lg font-bold text-amber-700">{formatPercent(csData.healthOverview.businessSideMetrics.upsellRate)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* ═══════════════════ Module 2: Per-Product Customer Value (Restructured) ═══════════════════ */}
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-indigo-500" />
+                      产品线业务运营分析
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">以AIMI为核心，广告与独立站协同运营，共同驱动客户价值增长{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+
+                    {/* ── AIMI 运营面板 ── */}
+                    <div className="p-5 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/60 to-white">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="w-3 h-3 rounded-full bg-indigo-500" />
+                        <h3 className="text-base font-bold text-indigo-800">AIMI 运营面板</h3>
+                        <Badge className="text-xs bg-indigo-600 text-white border-0">★ 核心业务</Badge>
+                        <Badge variant="outline" className="text-xs border-indigo-300 text-indigo-600">产品侧 · 效果侧</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        {/* Product-side metrics */}
+                        <div className="p-3 rounded-lg bg-white/80 border border-indigo-100">
+                          <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-1"><Target className="w-3 h-3" />产品侧指标</p>
+                          <div className="space-y-2">
+                            <div><p className="text-xs text-slate-500">产品使用率</p><p className="text-lg font-bold text-indigo-700">{formatPercent(csData.healthOverview.productSideMetrics.productUsageRate)}</p><Progress value={csData.healthOverview.productSideMetrics.productUsageRate} className="h-1.5 mt-0.5" /></div>
+                            <div><p className="text-xs text-slate-500">功能活跃度</p><p className="text-lg font-bold text-indigo-700">{csData.healthOverview.productSideMetrics.featureActivityScore}<span className="text-xs font-normal text-slate-400">分</span></p></div>
+                            <div><p className="text-xs text-slate-500">使用深度</p><p className="text-lg font-bold text-indigo-700">{csData.healthOverview.productSideMetrics.usageDepth}<span className="text-xs font-normal text-slate-400">/6模块</span></p></div>
+                          </div>
+                        </div>
+                        {/* Effect-side metrics */}
+                        <div className="p-3 rounded-lg bg-white/80 border border-indigo-100">
+                          <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-1"><TrendingUp className="w-3 h-3" />效果侧指标</p>
+                          <div className="space-y-2">
+                            <div><p className="text-xs text-slate-500">粉丝增长率</p><p className="text-lg font-bold text-indigo-700">{formatPercent(csData.productLineValue.aimi.followerGrowthAvg)}</p></div>
+                            <div><p className="text-xs text-slate-500">内容互动率</p><p className="text-lg font-bold text-indigo-700">{formatPercent(csData.healthOverview.effectSideMetrics.contentInteractionRate)}</p></div>
+                            <div><p className="text-xs text-slate-500">询盘率</p><p className="text-lg font-bold text-indigo-700">{formatPercent(csData.healthOverview.effectSideMetrics.inquiryRate)}</p></div>
+                          </div>
+                        </div>
+                        {/* AIMI Version Distribution */}
+                        <div className="p-3 rounded-lg bg-white/80 border border-indigo-100">
+                          <p className="text-xs font-bold text-indigo-600 mb-2 flex items-center gap-1"><PieChartIcon className="w-3 h-3" />版本分布</p>
+                          <div className="space-y-2">
+                            {[
+                              { version: 'Lite', count: Math.round(csData.healthOverview.totalCustomers * 0.35), color: '#a5b4fc' },
+                              { version: 'Standard', count: Math.round(csData.healthOverview.totalCustomers * 0.40), color: '#6366f1' },
+                              { version: 'Pro', count: Math.round(csData.healthOverview.totalCustomers * 0.25), color: '#4338ca' },
+                            ].map((v) => (
+                              <div key={v.version}>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-600">{v.version}</span>
+                                  <span className="font-bold text-indigo-700">{v.count}家</span>
+                                </div>
+                                <div className="w-full bg-indigo-100 rounded-full h-2 mt-0.5">
+                                  <div className="h-2 rounded-full" style={{ width: `${(v.count / csData.healthOverview.totalCustomers) * 100}%`, backgroundColor: v.color }} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Highlights & Issues */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" />亮点</p>
+                          {csData.productLineValue.aimi.successHighlights.slice(0, 2).map((h, i) => (
+                            <p key={i} className="text-xs text-slate-600 ml-4 mb-0.5">• {h}</p>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />问题</p>
+                          {csData.productLineValue.aimi.issues.slice(0, 2).map((h, i) => (
+                            <p key={i} className="text-xs text-slate-600 ml-4 mb-0.5">• {h}</p>
+                          ))}
+                        </div>
+                      </div>
+                      {/* VOC for AIMI */}
+                      {csData.vocData && csData.vocData.filter(v => v.productLine === 'AIMI').length > 0 && (
+                        <div className="pt-3 border-t border-indigo-100">
+                          <p className="text-xs font-semibold text-indigo-600 mb-2 flex items-center gap-1"><MessageSquare className="w-3 h-3" />客户之声</p>
+                          <div className="space-y-1.5">
+                            {csData.vocData.filter(v => v.productLine === 'AIMI').slice(0, 3).map((v, i) => (
+                              <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-white/70 border border-indigo-50">
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${v.feedbackType === '好评' ? 'border-emerald-300 text-emerald-600' : v.feedbackType === '投诉' ? 'border-red-300 text-red-600' : v.feedbackType === '建议' ? 'border-blue-300 text-blue-600' : 'border-amber-300 text-amber-600'}`}>{v.feedbackType}</Badge>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-slate-700 line-clamp-1">{v.content}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">{v.customerName} · {v.date}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── 广告业务面板 ── */}
+                    <div className="p-5 rounded-xl border-2 border-amber-200 bg-gradient-to-r from-amber-50/60 to-white">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="w-3 h-3 rounded-full bg-amber-500" />
+                        <h3 className="text-base font-bold text-amber-800">广告业务面板</h3>
+                        <Badge variant="outline" className="text-xs border-slate-300 text-slate-600">协同业务</Badge>
+                        <Badge variant="outline" className="text-xs border-amber-300 text-amber-600">消耗分层 · 续费深度</Badge>
+                      </div>
+                      {/* Customer count: New + Old side by side */}
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="p-3 rounded-lg bg-white/80 border border-amber-100 text-center">
+                          <p className="text-xs text-slate-500 mb-1">新增客户</p>
+                          <p className="text-2xl font-bold text-amber-700">{csData.adsRenewalDepth?.newCustomers ?? '-'}</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-white/80 border border-amber-100 text-center">
+                          <p className="text-xs text-slate-500 mb-1">老客户</p>
+                          <p className="text-2xl font-bold text-amber-700">{csData.adsRenewalDepth?.oldCustomers ?? '-'}</p>
+                        </div>
+                      </div>
+                      {/* Spend Tier Horizontal Bar Chart */}
+                      {csData.adsSpendTiers && (
+                        <div className="mb-4">
+                          <p className="text-xs font-bold text-amber-600 mb-2 flex items-center gap-1"><BarChart3 className="w-3 h-3" />客户消耗分层</p>
+                          <div className="space-y-2">
+                            {csData.adsSpendTiers.map((tier) => {
+                              const maxCount = Math.max(...csData.adsSpendTiers.map(t => t.customerCount), 1);
+                              return (
+                                <div key={tier.tier} className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-slate-600 w-10 text-right flex-shrink-0">{tier.tier}</span>
+                                  <div className="flex-1 relative">
+                                    <div className="w-full bg-amber-100 rounded-full h-6">
+                                      <div
+                                        className="h-6 rounded-full flex items-center justify-end pr-2 transition-all"
+                                        style={{ width: `${Math.max((tier.customerCount / maxCount) * 100, 12)}%`, backgroundColor: PRODUCT_COLORS.ads, opacity: 0.7 }}
+                                      >
+                                        <span className="text-[10px] font-bold text-white">{tier.customerCount}家</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 w-14 flex-shrink-0">续费{formatPercent(tier.renewalRate)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {/* Renewal Depth */}
+                      {csData.adsRenewalDepth && (
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200 text-center">
+                            <p className="text-xs text-slate-500 mb-1">首次续费率</p>
+                            <p className="text-2xl font-bold text-amber-700">{formatPercent(csData.adsRenewalDepth.firstRenewalRate)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200 text-center">
+                            <p className="text-xs text-slate-500 mb-1">二次续费率</p>
+                            <p className="text-2xl font-bold text-amber-700">{formatPercent(csData.adsRenewalDepth.secondRenewalRate)}</p>
+                          </div>
+                        </div>
+                      )}
+                      {/* Highlights & Issues */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" />亮点</p>
+                          {csData.productLineValue.ads.successHighlights.slice(0, 2).map((h, i) => (
+                            <p key={i} className="text-xs text-slate-600 ml-4 mb-0.5">• {h}</p>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />问题</p>
+                          {csData.productLineValue.ads.issues.slice(0, 2).map((h, i) => (
+                            <p key={i} className="text-xs text-slate-600 ml-4 mb-0.5">• {h}</p>
+                          ))}
+                        </div>
+                      </div>
+                      {/* VOC for 广告 */}
+                      {csData.vocData && csData.vocData.filter(v => v.productLine === '广告').length > 0 && (
+                        <div className="pt-3 border-t border-amber-100">
+                          <p className="text-xs font-semibold text-amber-600 mb-2 flex items-center gap-1"><MessageSquare className="w-3 h-3" />客户之声</p>
+                          <div className="space-y-1.5">
+                            {csData.vocData.filter(v => v.productLine === '广告').slice(0, 3).map((v, i) => (
+                              <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-white/70 border border-amber-50">
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${v.feedbackType === '好评' ? 'border-emerald-300 text-emerald-600' : v.feedbackType === '投诉' ? 'border-red-300 text-red-600' : v.feedbackType === '建议' ? 'border-blue-300 text-blue-600' : 'border-amber-300 text-amber-600'}`}>{v.feedbackType}</Badge>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-slate-700 line-clamp-1">{v.content}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">{v.customerName} · {v.date}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── 独立站业务面板 ── */}
+                    <div className="p-5 rounded-xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50/60 to-white">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                        <h3 className="text-base font-bold text-emerald-800">独立站业务面板</h3>
+                        <Badge variant="outline" className="text-xs border-slate-300 text-slate-600">协同业务</Badge>
+                        <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-600">留资转化 · 交付效率</Badge>
+                      </div>
+                      {/* Funnel: paid UV → leads → conversion */}
+                      {csData.siteDeliveryEfficiency && (
+                        <div className="mb-4">
+                          <p className="text-xs font-bold text-emerald-600 mb-2 flex items-center gap-1"><Flame className="w-3 h-3" />付费UV留资转化漏斗</p>
+                          <div className="flex items-center justify-center">
+                            <svg viewBox="0 0 400 120" className="w-full max-w-md" preserveAspectRatio="xMidYMid meet">
+                              {/* Top trapezoid - Paid UV */}
+                              <polygon points="40,10 360,10 330,45 70,45" fill="#10b981" fillOpacity="0.7" />
+                              <text x="200" y="33" textAnchor="middle" fontSize="12" fill="white" fontWeight="600">付费UV: {csData.siteDeliveryEfficiency.paidUV}</text>
+                              {/* Middle trapezoid - Leads */}
+                              <polygon points="70,50 330,50 290,85 110,85" fill="#10b981" fillOpacity="0.5" />
+                              <text x="200" y="73" textAnchor="middle" fontSize="12" fill="white" fontWeight="600">留资数: {csData.siteDeliveryEfficiency.leads}</text>
+                              {/* Bottom trapezoid - Conversion */}
+                              <polygon points="110,90 290,90 250,115 150,115" fill="#10b981" fillOpacity="0.3" />
+                              <text x="200" y="108" textAnchor="middle" fontSize="11" fill="#065f46" fontWeight="600">转化率: {formatPercent(csData.siteDeliveryEfficiency.leadConversionRate)}</text>
+                            </svg>
+                          </div>
+                        </div>
+                      )}
+                      {/* Delivery efficiency metrics */}
+                      {csData.siteDeliveryEfficiency && (
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          <div className="p-3 rounded-lg bg-white/80 border border-emerald-100 text-center">
+                            <p className="text-xs text-slate-500 mb-1">交付成本率</p>
+                            <p className="text-2xl font-bold text-emerald-700">{formatPercent(csData.siteDeliveryEfficiency.deliveryCostRate)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white/80 border border-emerald-100 text-center">
+                            <p className="text-xs text-slate-500 mb-1">平均交付天数</p>
+                            <p className="text-2xl font-bold text-emerald-700">{csData.siteDeliveryEfficiency.avgDeliveryDays}<span className="text-xs font-normal text-slate-400">天</span></p>
+                          </div>
+                        </div>
+                      )}
+                      {/* No renewal tracking note */}
+                      <div className="p-2.5 rounded-lg bg-yellow-50 border border-yellow-200 mb-4">
+                        <p className="text-xs text-yellow-700 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />独立站暂未建立续费跟踪体系</p>
+                      </div>
+                      {/* Highlights & Issues */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <p className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" />亮点</p>
+                          {csData.productLineValue.site.successHighlights.slice(0, 2).map((h, i) => (
+                            <p key={i} className="text-xs text-slate-600 ml-4 mb-0.5">• {h}</p>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />问题</p>
+                          {csData.productLineValue.site.issues.slice(0, 2).map((h, i) => (
+                            <p key={i} className="text-xs text-slate-600 ml-4 mb-0.5">• {h}</p>
+                          ))}
+                        </div>
+                      </div>
+                      {/* VOC for 独立站 */}
+                      {csData.vocData && csData.vocData.filter(v => v.productLine === '独立站').length > 0 && (
+                        <div className="pt-3 border-t border-emerald-100">
+                          <p className="text-xs font-semibold text-emerald-600 mb-2 flex items-center gap-1"><MessageSquare className="w-3 h-3" />客户之声</p>
+                          <div className="space-y-1.5">
+                            {csData.vocData.filter(v => v.productLine === '独立站').slice(0, 3).map((v, i) => (
+                              <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-white/70 border border-emerald-50">
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${v.feedbackType === '好评' ? 'border-emerald-300 text-emerald-600' : v.feedbackType === '投诉' ? 'border-red-300 text-red-600' : v.feedbackType === '建议' ? 'border-blue-300 text-blue-600' : 'border-amber-300 text-amber-600'}`}>{v.feedbackType}</Badge>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-slate-700 line-clamp-1">{v.content}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">{v.customerName} · {v.date}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                  </CardContent>
+                </Card>
+
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1 h-5 rounded-full bg-gradient-to-b from-violet-500 to-purple-500" />
+                    <h2 className="text-lg font-bold text-slate-800">客户价值深度分析</h2>
+                    <span className="text-xs text-slate-400">多产品价值·购买旅程·续费增购</span>
+                  </div>
+
+                {/* ═══════════════════ Module 3: Multi-Product Value Comparison ═══════════════════ */}
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-orange-500" />
+                      多产品客户（成功）价值分析
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">单产品 vs 双产品 vs 全链路(AIMI+广告+独立站) 客户价值对比{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left p-3 font-semibold text-slate-700">客户类型</th>
+                            <th className="text-center p-3 font-semibold text-slate-700">客户数</th>
+                            <th className="text-center p-3 font-semibold text-slate-700">占比</th>
+                            <th className="text-center p-3 font-semibold text-slate-700">ARPU <span className="font-normal text-slate-400">(总ARR/客户数)</span></th>
+                            <th className="text-center p-3 font-semibold text-slate-700">续费率 <span className="font-normal text-slate-400">(已续费/应续费)</span></th>
+                            <th className="text-center p-3 font-semibold text-slate-700">LTV <span className="font-normal text-slate-400">(ARPU×1/(1-续费率)×0.8)</span></th>
+                            <th className="text-left p-3 font-semibold text-slate-700">洞察</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { label: '单产品', data: csData.multiProductValue.single, rowBg: 'bg-slate-50/50', textColor: 'text-slate-700' },
+                            { label: '双产品', data: csData.multiProductValue.dual, rowBg: 'bg-blue-50/50', textColor: 'text-blue-700' },
+                            { label: '全链路', data: csData.multiProductValue.fullChain, rowBg: 'bg-emerald-50/50', textColor: 'text-emerald-700' },
+                          ].map((row, i) => (
+                            <tr key={i} className={`border-b border-slate-100 ${row.rowBg} hover:bg-white/80 transition-colors`}>
+                              <td className="p-3 font-semibold text-slate-800">{row.label}</td>
+                              <td className="p-3 text-center font-bold text-slate-800">{row.data.count}</td>
+                              <td className="p-3 text-center"><Badge variant="outline" className={row.textColor}>{formatPercent(row.data.ratio)}</Badge></td>
+                              <td className="p-3 text-center font-bold text-slate-800">{formatCurrency(row.data.arpu)}</td>
+                              <td className="p-3 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <Progress value={row.data.renewalRate} className="w-16 h-2" />
+                                  <span className="text-xs font-medium">{formatPercent(row.data.renewalRate)}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 text-center font-bold text-slate-800">{formatCurrency(row.data.ltv)}</td>
+                              <td className="p-3 text-xs text-slate-600 max-w-[200px]">{row.data.insight}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* LTV Comparison Cards */}
+                    <div className="mt-4 grid grid-cols-3 gap-4">
+                      <div className="text-center p-4 rounded-xl bg-slate-50 border border-slate-200">
+                        <p className="text-xs text-slate-500 mb-1">单产品 LTV <span className="text-slate-400">(ARPU/流失率×0.8)</span></p>
+                        <p className="text-xl font-bold text-slate-700">{formatCurrency(csData.multiProductValue.single.ltv)}</p>
+                      </div>
+                      <div className="text-center p-4 rounded-xl bg-blue-50 border border-blue-200">
+                        <p className="text-xs text-slate-500 mb-1">双产品 LTV <span className="text-slate-400">(ARPU/流失率×0.8)</span></p>
+                        <p className="text-xl font-bold text-blue-700">{formatCurrency(csData.multiProductValue.dual.ltv)}</p>
+                        {csData.multiProductValue.single.ltv > 0 && (
+                          <p className="text-xs text-emerald-600 mt-1 flex items-center justify-center gap-0.5">
+                            <ArrowUpRight className="w-3 h-3" />
+                            {((csData.multiProductValue.dual.ltv / csData.multiProductValue.single.ltv - 1) * 100).toFixed(0)}% vs 单产品
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-center p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                        <p className="text-xs text-slate-500 mb-1">全链路 LTV <span className="text-slate-400">(ARPU/流失率×0.8)</span></p>
+                        <p className="text-xl font-bold text-emerald-700">{formatCurrency(csData.multiProductValue.fullChain.ltv)}</p>
+                        {csData.multiProductValue.single.ltv > 0 && (
+                          <p className="text-xs text-emerald-600 mt-1 flex items-center justify-center gap-0.5">
+                            <ArrowUpRight className="w-3 h-3" />
+                            {((csData.multiProductValue.fullChain.ltv / csData.multiProductValue.single.ltv - 1) * 100).toFixed(0)}% vs 单产品
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+
+                {/* ═══════════════════ Module 7: Customer Purchase Journey ═══════════════════ */}
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <GitBranch className="w-5 h-5 text-purple-500" />
+                      客户购买旅程与价值路径
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">客户从AIMI出发的价值扩展路径 — 购买周期与交叉销售洞察{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {csData.customerJourney ? (
+                      <>
+                        <SankeyDiagram
+                          paths={csData.customerJourney.paths}
+                          entryDistribution={csData.customerJourney.entryDistribution}
+                        />
+                        {/* Journey Insight Cards */}
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {csData.customerJourney.paths.length > 0 && (() => {
+                            const topPath = [...csData.customerJourney.paths].sort((a, b) => b.customerCount - a.customerCount)[0];
+                            const aimiToAds = csData.customerJourney.paths.find(p => p.from === 'AIMI' && p.to === '广告');
+                            const fullChainARPU = csData.multiProductValue.fullChain.arpu;
+                            const singleARPU = csData.multiProductValue.single.arpu;
+                            const arpuRatio = singleARPU > 0 ? (fullChainARPU / singleARPU).toFixed(1) : '-';
+                            return [
+                              {
+                                icon: <Flame className="w-4 h-4 text-orange-500" />,
+                                title: '最常见交叉路径',
+                                value: `${topPath.from} → ${topPath.to}`,
+                                detail: `${topPath.customerCount}位客户走了这条路径`,
+                                bg: 'bg-orange-50 border-orange-200',
+                              },
+                              {
+                                icon: <Clock className="w-4 h-4 text-blue-500" />,
+                                title: 'AIMI客户扩展周期',
+                                value: aimiToAds ? `${aimiToAds.avgDaysToCross}天` : '-',
+                                detail: aimiToAds ? `AIMI→广告平均扩展时间` : '暂无数据',
+                                bg: 'bg-blue-50 border-blue-200',
+                              },
+                              {
+                                icon: <DollarSign className="w-4 h-4 text-emerald-500" />,
+                                title: '全链路ARPU倍数',
+                                value: `${arpuRatio}x`,
+                                detail: '全链路客户ARPU是单产品倍数',
+                                bg: 'bg-emerald-50 border-emerald-200',
+                              },
+                            ];
+                          })().map((insight, i) => (
+                            <div key={i} className={`p-4 rounded-xl border ${insight.bg}`}>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                {insight.icon}
+                                <span className="text-xs font-semibold text-slate-600">{insight.title}</span>
+                              </div>
+                              <p className="text-lg font-bold text-slate-800">{insight.value}</p>
+                              <p className="text-xs text-slate-500 mt-1">{insight.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-500 text-center py-8">暂无客户旅程数据</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+
+                {/* ═══════════════════ Module 4: Renewal/Churn Analysis ═══════════════════ */}
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Repeat className="w-5 h-5 text-blue-500" />
+                      客户续费、增购、流失分析
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">按产品线分析续费率、增购金额及TOP3流失原因{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Renewal Stats Cards */}
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-slate-700">各产品线续费概览</p>
+                        {[
+                          { label: 'AIMI', data: csData.renewalChurn.aimi, color: 'bg-indigo-500', borderColor: 'border-indigo-200', isSite: false, isAds: false },
+                          { label: '广告', data: csData.renewalChurn.ads, color: 'bg-amber-500', borderColor: 'border-amber-200', isSite: false, isAds: true },
+                          { label: '独立站', data: csData.renewalChurn.site, color: 'bg-emerald-500', borderColor: 'border-emerald-200', isSite: true, isAds: false },
+                          { label: '整体', data: csData.renewalChurn.overall, color: 'bg-slate-700', borderColor: 'border-slate-200', isSite: false, isAds: false },
+                        ].map((row, i) => (
+                          <div key={i} className={`p-3 rounded-xl border ${row.borderColor} bg-white hover:shadow-sm transition-shadow`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2.5 h-2.5 rounded-full ${row.color}`} />
+                                <span className="text-sm font-semibold text-slate-800">{row.label}</span>
+                              </div>
+                              <Badge variant={row.data.renewalRate >= 70 ? 'default' : row.data.renewalRate >= 50 ? 'secondary' : 'destructive'} className="text-xs">
+                                续费率 {formatPercent(row.data.renewalRate)}
+                              </Badge>
+                            </div>
+                            {/* 独立站 yellow banner */}
+                            {row.isSite && (
+                              <div className="p-2 rounded-lg bg-yellow-50 border border-yellow-200 mb-2">
+                                <p className="text-xs text-yellow-700 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />独立站暂未建立续费跟踪体系，以下数据仅供参考</p>
+                              </div>
+                            )}
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="text-center p-1.5 rounded bg-slate-50">
+                                <span className="text-slate-500">到期续费</span>
+                                <p className="font-bold text-slate-800">{row.data.renewed}/{row.data.upForRenewal}</p>
+                              </div>
+                              <div className="text-center p-1.5 rounded bg-emerald-50">
+                                <span className="text-slate-500">增购金额</span>
+                                <p className="font-bold text-emerald-700">{formatCurrency(row.data.upsellAmount)}</p>
+                              </div>
+                              <div className="text-center p-1.5 rounded bg-red-50">
+                                <span className="text-slate-500">流失风险</span>
+                                <p className="font-bold text-red-600">{row.data.upForRenewal - row.data.renewed}家</p>
+                              </div>
+                            </div>
+                            {/* 广告 renewal depth */}
+                            {row.isAds && csData.adsRenewalDepth && (
+                              <div className="mt-2 pt-2 border-t border-amber-100 flex items-center gap-4">
+                                <span className="text-xs text-slate-500">续费深度:</span>
+                                <span className="text-xs text-amber-700 font-medium">首次续费率 {formatPercent(csData.adsRenewalDepth.firstRenewalRate)}</span>
+                                <span className="text-xs text-amber-700 font-medium">二次续费率 {formatPercent(csData.adsRenewalDepth.secondRenewalRate)}</span>
+                              </div>
+                            )}
+                            {row.data.topChurnReasons.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-slate-100">
+                                <p className="text-xs text-slate-500 mb-1">TOP流失原因:</p>
+                                {row.data.topChurnReasons.slice(0, 3).map((reason, j) => (
+                                  <p key={j} className="text-xs text-slate-600 ml-2">• {reason}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Renewal Bar Chart */}
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700 mb-3">续费情况对比</p>
+                        <ResponsiveContainer width="100%" height={340}>
+                          <BarChart data={renewalChartData} barCategoryGap="20%">
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 11 }} />
+                            <Tooltip />
+                            <Legend />
+                            <Bar dataKey="到期续费" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="到期未续" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-1 h-5 rounded-full bg-gradient-to-b from-amber-500 to-orange-500" />
+                    <h2 className="text-lg font-bold text-slate-800">运营管理</h2>
+                    <span className="text-xs text-slate-400">人效分析·关键问题·行动项</span>
+                  </div>
+
+                {/* ═══════════════════ Module 5: Team Efficiency ═══════════════════ */}
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <UserCheck className="w-5 h-5 text-teal-500" />
+                      客成经理人效分析
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">分产品线人效数据 — 人均服务客户数、客户覆盖率、响应时间、续费达成率、人均续费ARR(续费ARR/客成人数){dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Team Overview KPIs */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                      {[
+                        { label: '人均服务客户数', value: csData.teamEfficiency.customersPerCSM, unit: '家', icon: <Users className="w-4 h-4" />, color: 'text-teal-600', bg: 'bg-teal-50 border-teal-200' },
+                        { label: '客户覆盖率', value: formatPercent(csData.teamEfficiency.customerCoverageRate), unit: '', icon: <Target className="w-4 h-4" />, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+                        { label: '平均响应时间', value: csData.teamEfficiency.avgResponseTimeHours, unit: 'h', icon: <Clock className="w-4 h-4" />, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
+                        { label: '续费目标达成率', value: formatPercent(csData.teamEfficiency.renewalTargetRate), unit: '', icon: <CheckCircle className="w-4 h-4" />, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
+                      ].map((m, i) => (
+                        <div key={i} className={`p-3 rounded-xl ${m.bg} border`}>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className={m.color}>{m.icon}</span>
+                            <span className="text-xs text-slate-500">{m.label}</span>
+                          </div>
+                          <p className={`text-xl font-bold ${m.color}`}>{typeof m.value === 'number' ? m.value : m.value}{m.unit}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Per-Product-Line Efficiency Table */}
+                    <p className="text-sm font-semibold text-slate-700 mb-2">分产品线人效明细</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left p-2.5 font-semibold text-slate-600">产品线</th>
+                            <th className="text-center p-2.5 font-semibold text-slate-600">服务客户数</th>
+                            <th className="text-center p-2.5 font-semibold text-slate-600">覆盖率</th>
+                            <th className="text-center p-2.5 font-semibold text-slate-600">平均响应(h)</th>
+                            <th className="text-center p-2.5 font-semibold text-slate-600">续费达成率</th>
+                            <th className="text-center p-2.5 font-semibold text-slate-600">人均续费ARR</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productLineEfficiencyData.map((row, i) => (
+                            <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                              <td className="p-2.5 font-medium">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: row.name === 'AIMI' ? '#6366f1' : row.name === '广告' ? '#f59e0b' : '#10b981' }} />
+                                  <span className="text-slate-800">{row.name}</span>
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-center">{row.customerCount}</td>
+                              <td className="p-2.5 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <Progress value={row.coverageRate} className="w-16 h-2" />
+                                  <span className="text-xs">{formatPercent(row.coverageRate)}</span>
+                                </div>
+                              </td>
+                              <td className="p-2.5 text-center">
+                                <span className={`inline-flex items-center gap-0.5 ${row.avgResponseHours <= 12 ? 'text-emerald-600' : row.avgResponseHours <= 24 ? 'text-amber-600' : 'text-red-600'}`}>
+                                  {row.avgResponseHours <= 12 ? <ArrowDownRight className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+                                  {row.avgResponseHours.toFixed(1)}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-center">
+                                <Badge variant={row.renewalAchievementRate >= 70 ? 'default' : 'secondary'} className="text-xs">
+                                  {formatPercent(row.renewalAchievementRate)}
+                                </Badge>
+                              </td>
+                              <td className="p-2.5 text-center font-bold text-slate-800">{formatCurrency(row.renewalARR)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+
+                {/* ═══════════════════ Module 6: Key Issues & Solutions ═══════════════════ */}
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Lightbulb className="w-5 h-5 text-yellow-500" />
+                      客户成功关键问题和解决方案
+                    </CardTitle>
+                    <CardDescription className="flex items-center gap-2">当前周期内关键问题追踪与解决进度{dashboardData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {csData.keyIssues.map((item, i) => (
+                        <div key={i} className="p-4 rounded-xl border border-slate-200 bg-white hover:shadow-md transition-shadow">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <AlertOctagon className="w-4 h-4 text-red-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-slate-800 mb-1.5">
+                                问题{i + 1}: {item.issue}
+                              </p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
+                                <div className="p-2 rounded-lg bg-slate-50">
+                                  <span className="text-slate-500">根因:</span>{' '}
+                                  <span className="text-slate-700 font-medium">{item.rootCause}</span>
+                                </div>
+                                <div className="p-2 rounded-lg bg-emerald-50">
+                                  <span className="text-slate-500">方案:</span>{' '}
+                                  <span className="text-emerald-700 font-medium">{item.solution}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Badge variant="outline" className="text-xs">
+                                  <Users className="w-3 h-3 mr-1" />{item.owner}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  <Clock className="w-3 h-3 mr-1" />{item.deadline}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                </div>
+                </div>
+            )}
+
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Upload Tab (Enhanced)
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="upload">
+            <div className="max-w-5xl mx-auto space-y-4">
+              {/* ── Upload Summary Banner ── */}
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
+                <Upload className="w-5 h-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-semibold text-blue-800">数据上传 & 预览</p>
+                  <p className="text-xs text-blue-600">拖拽或点击上传 Excel 文件，可预览数据、选择参与分析的 Sheet 和列</p>
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">{Object.keys(uploadedFiles).length}/4 已上传</Badge>
+                  {Object.keys(uploadedFiles).length === 4 && <Badge className="text-xs bg-green-50 text-green-700 border-green-200">全部就绪</Badge>}
+                </div>
+              </div>
+
+              <Card>
+                <CardContent className="pt-5">
+                  <form onSubmit={handleUpload} className="space-y-4">
+                    {/* ── Drag-and-Drop Upload Zones ── */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { key: 'cs_implementation', label: '客成实施数据', icon: <FileSpreadsheet className="w-5 h-5" />, desc: '客户名称、客成经理、产品类型、版本、培训状态、服务状态、签约日期...', color: 'indigo' },
+                        { key: 'sales', label: '销售数据', icon: <Package className="w-5 h-5" />, desc: '订单编号、客户名称、订单来源、产品类型、版本、签约日期、订单金额、订单时长...', color: 'amber' },
+                        { key: 'user_activity', label: '用户数据', icon: <Users className="w-5 h-5" />, desc: '客户名称、帖子内容类型、社媒类型、是否AI生成、曝光数、互动数、发帖日期...', color: 'emerald' },
+                        { key: 'voc', label: 'VOC 数据', icon: <MessageSquare className="w-5 h-5" />, desc: '客户名称、反馈类型、反馈内容、产品线、日期...', color: 'rose' },
+                      ].map(f => {
+                        const isUploaded = !!uploadedFiles[f.key];
+                        const preview = excelPreviews[f.key];
+                        const isLoading = previewLoading[f.key];
+                        const isDragging = dragActive[f.key];
+
+                        const colorMap: Record<string, { border: string; bg: string; ring: string; text: string }> = {
+                          indigo: { border: 'border-indigo-300', bg: 'bg-indigo-50', ring: 'ring-indigo-400', text: 'text-indigo-700' },
+                          amber: { border: 'border-amber-300', bg: 'bg-amber-50', ring: 'ring-amber-400', text: 'text-amber-700' },
+                          emerald: { border: 'border-emerald-300', bg: 'bg-emerald-50', ring: 'ring-emerald-400', text: 'text-emerald-700' },
+                          rose: { border: 'border-rose-300', bg: 'bg-rose-50', ring: 'ring-rose-400', text: 'text-rose-700' },
+                        };
+                        const c = colorMap[f.color];
+
+                        return (
+                          <div key={f.key} className="space-y-2">
+                            {/* Drop Zone */}
+                            <div
+                              onDragOver={e => handleDragOver(e, f.key)}
+                              onDragLeave={e => handleDragLeave(e, f.key)}
+                              onDrop={e => handleDrop(e, f.key)}
+                              className={`relative rounded-xl border-2 border-dashed transition-all duration-200 ${
+                                isDragging
+                                  ? `${c.border} ${c.bg} ring-2 ${c.ring} ring-opacity-40 scale-[1.01]`
+                                  : isUploaded
+                                  ? 'border-green-300 bg-green-50/50'
+                                  : 'border-slate-300 bg-slate-50/50 hover:border-slate-400 hover:bg-slate-50'
+                              }`}
+                            >
+                              {isUploaded ? (
+                                /* Uploaded state */
+                                <div className="p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle className="w-5 h-5 text-green-500" />
+                                      <span className="text-sm font-semibold text-green-800">{f.label}</span>
+                                    </div>
+                                    <button type="button" onClick={() => handleRemoveFile(f.key)} className="p-1 rounded-full hover:bg-red-100 transition-colors">
+                                      <X className="w-4 h-4 text-red-400" />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                                    <span className="text-xs text-green-700 font-medium truncate max-w-[200px]">{uploadedFiles[f.key].name}</span>
+                                    <Badge className="text-xs bg-green-100 text-green-700 border-0">{(uploadedFiles[f.key].size / 1024).toFixed(0)} KB</Badge>
+                                  </div>
+                                  {preview && (
+                                    <div className="flex items-center gap-2">
+                                      {preview.sheets.map(s => (
+                                        <Badge key={s.name} variant="outline" className="text-xs border-green-200 text-green-600">
+                                          {s.name} ({s.rowCount}行)
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {/* Re-upload link */}
+                                  <label className="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 cursor-pointer hover:text-blue-800">
+                                    <FileUp className="w-3 h-3" />重新上传
+                                    <input type="file" name={f.key} accept=".xlsx,.xls" onChange={e => handleFileSelect(e, f.key)} className="hidden" />
+                                  </label>
+                                </div>
+                              ) : (
+                                /* Empty drop zone */
+                                <label className="flex flex-col items-center justify-center p-6 cursor-pointer min-h-[140px]">
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${isDragging ? c.bg : 'bg-slate-100'}`}>
+                                    {isLoading ? <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" /> : <FileUp className={`w-6 h-6 ${isDragging ? c.text : 'text-slate-400'}`} />}
+                                  </div>
+                                  <p className={`text-sm font-medium mb-1 ${isDragging ? c.text : 'text-slate-700'}`}>{f.label}</p>
+                                  <p className="text-xs text-slate-400 text-center mb-2">{f.desc}</p>
+                                  <p className="text-xs text-blue-600">
+                                    拖拽 Excel 到此处，或<span className="underline">点击选择文件</span>
+                                  </p>
+                                  <input type="file" name={f.key} accept=".xlsx,.xls" onChange={e => handleFileSelect(e, f.key)} className="hidden" />
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Per-file Preview (expandable) */}
+                            {preview && (
+                              <div className="space-y-2">
+                                {preview.sheets.map(sheet => {
+                                  const prefixedName = `${f.key}::${sheet.name}`;
+                                  const isExpanded = expandedSheet === prefixedName;
+                                  return (
+                                    <div key={prefixedName} className="border border-slate-200 rounded-lg overflow-hidden">
+                                      <div className="flex items-center justify-between p-2 bg-slate-50 cursor-pointer" onClick={() => setExpandedSheet(isExpanded ? null : prefixedName)}>
+                                        <div className="flex items-center gap-2">
+                                          <Switch checked={selectedSheets[prefixedName] ?? true} onCheckedChange={v => setSelectedSheets(prev => ({ ...prev, [prefixedName]: v }))} onClick={e => e.stopPropagation()} />
+                                          <div>
+                                            <p className="text-xs font-medium text-slate-700">{sheet.name}</p>
+                                            <p className="text-xs text-slate-400">{sheet.rowCount} 行 × {sheet.colCount} 列</p>
+                                          </div>
+                                          {selectedSheets[prefixedName] !== false ? <Badge className="bg-blue-50 text-blue-700 text-xs">参与分析</Badge> : <Badge variant="outline" className="text-xs">已排除</Badge>}
+                                        </div>
+                                        {isExpanded ? <ChevronUp className="w-3 h-3 text-slate-400" /> : <ChevronDown className="w-3 h-3 text-slate-400" />}
+                                      </div>
+                                      {isExpanded && (
+                                        <div className="p-2 space-y-2">
+                                          <div>
+                                            <p className="text-xs font-semibold text-slate-500 mb-1">列字段</p>
+                                            <div className="flex flex-wrap gap-1">
+                                              {sheet.headers.map(h => (
+                                                <button key={h} type="button" onClick={() => setSelectedColumns(prev => ({ ...prev, [prefixedName]: { ...prev[prefixedName], [h]: !(prev[prefixedName]?.[h] ?? false) } }))}
+                                                  className={`text-xs px-1.5 py-0.5 rounded-full border transition-colors ${selectedColumns[prefixedName]?.[h] !== false ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-400 line-through'}`}>
+                                                  {h} <span className="opacity-60">({sheet.columnTypes[h]})</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                          <div>
+                                            <p className="text-xs font-semibold text-slate-500 mb-1">数据预览（前5行）</p>
+                                            <div className="overflow-x-auto"><table className="text-xs w-full"><thead><tr className="bg-slate-100">{sheet.headers.map(h => (<th key={h} className="px-1.5 py-0.5 text-left font-medium text-slate-600 whitespace-nowrap">{h}</th>))}</tr></thead>
+                                              <tbody>{sheet.previewRows.map((row, i) => (<tr key={i} className="border-t border-slate-100">{sheet.headers.map(h => (<td key={h} className="px-1.5 py-0.5 text-slate-700 whitespace-nowrap max-w-[120px] truncate">{maskCustomerName(String(row[h] ?? ''))}</td>))}</tr>))}</tbody>
+                                            </table></div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <Separator />
+
+                    {/* Weekly Summary */}
+                    <div>
+                      <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-2"><MessageSquare className="w-4 h-4" />本周关键信息摘要（可选）</label>
+                      <Textarea value={weeklySummary} onChange={e => setWeeklySummary(e.target.value)} placeholder="输入一线反馈、需要决策的事项等定性信息..." rows={3} />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <Button type="submit" disabled={loading || Object.keys(uploadedFiles).length === 0} className="flex-1">
+                        {loading ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}{loading ? '处理中...' : `确认并处理数据（${Object.keys(uploadedFiles).length} 个文件）`}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={handleGenerateReport} disabled={reportLoading}>
+                        <Brain className="w-4 h-4 mr-2" />{reportLoading ? '生成中...' : 'AI生成周报'}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Report Tab
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="report">
+            <ReportViewer
+              reportContent={reportContent}
+              weekLabel={dashboardData?.weekLabel}
+              reportLoading={reportLoading}
+              onGenerate={handleGenerateReport}
+              onCopy={() => { navigator.clipboard.writeText(reportContent); toast.success('已复制到剪贴板'); }}
+              onNotify={handleNotify}
+            />
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Visualization Tab — 商业价值指标一览
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="visualization">
+            <div className="bg-[#0f1729] rounded-xl p-6 space-y-6 min-h-[600px]">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-[#4a9eff]" />
+                商业价值指标一览
+                {dashboardData && <span className="text-xs text-slate-400 ml-2">{dashboardData.weekLabel}</span>}
+                {dashboardData?.isDemo && <span className="text-xs text-amber-400/70 ml-2">· 示例数据</span>}
+                {lastUploadResult && !lastUploadResult.isDemo && <span className="text-xs text-green-400/80 ml-2">· 真实数据（{lastUploadResult.recordCounts.cs + lastUploadResult.recordCounts.sales + lastUploadResult.recordCounts.user + lastUploadResult.recordCounts.voc}条记录）</span>}
+              </h2>
+
+              {csData ? (
+                <>
+                  {/* ── 核心商业指标 ── */}
+                  <div className="bg-gradient-to-r from-[#1a2744] to-[#1a2332] rounded-lg p-5 border border-[#4a9eff]/30">
+                    <div className="flex items-center gap-2 mb-4">
+                      <DollarSign className="w-4 h-4 text-[#4a9eff]" />
+                      <span className="text-sm font-bold text-white">核心商业指标</span>
+                      <span className="text-[10px] text-slate-400 ml-1">商业视角</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {[
+                        { label: '总客户数', value: `${csData.healthOverview.totalCustomers}`, desc: '' },
+                        { label: '整体续约率(NRR)', value: formatPercent(csData.healthOverview.businessSideMetrics.renewalRate), desc: '已续约/应续约' },
+                        { label: '增购率', value: formatPercent(csData.healthOverview.businessSideMetrics.upsellRate), desc: '增购客户/总客户' },
+                        { label: 'NPS评分', value: `${csData.healthOverview.businessSideMetrics.npsScore}`, desc: '推荐者%-贬损者%' },
+                        { label: '全链路占比', value: formatPercent(csData.multiProductValue.fullChain.ratio), desc: '全链路/总客户' },
+                        { label: '全链路LTV', value: formatCurrency(csData.multiProductValue.fullChain.ltv), desc: 'ARPU/流失率×0.8' },
+                      ].map((m, i) => (
+                        <div key={i} className="bg-[#0f1729] rounded-lg p-3 border border-slate-700/50">
+                          <p className="text-xs text-slate-400 mb-0.5">{m.label}</p>
+                          <p className="text-lg font-bold text-white">{m.value}</p>
+                          {m.desc && <p className="text-[10px] text-slate-500 mt-0.5">{m.desc}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ── 第二行：续费×健康度 + 产品线对比 ── */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 续费与流失对比 */}
+                    <div className="bg-[#1a2332] rounded-lg p-4">
+                      <p className="text-sm font-medium text-white mb-1">分产品线续费率</p>
+                      <p className="text-[10px] text-slate-500 mb-3">NRR(净收入留存率) = 已续约ARR/应续约ARR</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={renewalChartData.filter(r => r.name !== '整体')}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                          <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                          <Tooltip contentStyle={DARK_TOOLTIP_STYLE} labelStyle={{ color: '#e2e8f0' }} />
+                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                          <Bar dataKey="到期续费" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="到期未续" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* 客户健康度分布 */}
+                    <div className="bg-[#1a2332] rounded-lg p-4">
+                      <p className="text-sm font-medium text-white mb-1">客户健康度分布</p>
+                      <p className="text-[10px] text-slate-500 mb-3">{'健康=产品使用率>70% & 无客诉 | 危险=有客诉/赔偿'}</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={healthPieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" label={renderPieLabel}>
+                            {healthPieData.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
+                          </Pie>
+                          <Tooltip contentStyle={DARK_TOOLTIP_STYLE} labelStyle={{ color: '#e2e8f0' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* ── 第三行：单位经济学 × 产品线人效 ── */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 单位经济学：ARPU & LTV 对比 */}
+                    <div className="bg-[#1a2332] rounded-lg p-4">
+                      <p className="text-sm font-medium text-white mb-1">单位经济学 (Unit Economics)</p>
+                      <p className="text-[10px] text-slate-500 mb-3">{'ARPU=总ARR/客户数 | LTV=ARPU×1/(1-续费率)×0.8 | LTV/ARPU>3为健康'}</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={multiProductChartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                          <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                          <Tooltip contentStyle={DARK_TOOLTIP_STYLE} labelStyle={{ color: '#e2e8f0' }} />
+                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                          <Bar dataKey="ARPU" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="续费率" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="LTV" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* 分产品线人效 */}
+                    <div className="bg-[#1a2332] rounded-lg p-4">
+                      <p className="text-sm font-medium text-white mb-1">分产品线客成人效</p>
+                      <p className="text-[10px] text-slate-500 mb-3">人均续费ARR=产品线续费ARR/分配客成人数</p>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={productLineEfficiencyData.map(row => ({
+                          name: row.name,
+                          续费达成率: row.renewalAchievementRate,
+                          覆盖率: row.coverageRate,
+                          人均续费ARR: row.renewalARR >= 10000 ? Math.round(row.renewalARR / 10000) : row.renewalARR,
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                          <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                          <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} />
+                          <Tooltip contentStyle={DARK_TOOLTIP_STYLE} labelStyle={{ color: '#e2e8f0' }} />
+                          <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                          <Bar dataKey="续费达成率" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="覆盖率" fill="#4a9eff" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* ── 第四行：多产品价值扩展路径 + 健康度雷达 ── */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 多产品价值对比卡片 */}
+                    <div className="bg-[#1a2332] rounded-lg p-4">
+                      <p className="text-sm font-medium text-white mb-1">交叉销售价值提升</p>
+                      <p className="text-[10px] text-slate-500 mb-3">单产品→双产品→全链路：ARPU和LTV跃迁</p>
+                      <div className="space-y-3">
+                        {[
+                          { label: '单产品', data: csData.multiProductValue.single, color: '#94a3b8' },
+                          { label: '双产品', data: csData.multiProductValue.dual, color: '#6366f1' },
+                          { label: '全链路', data: csData.multiProductValue.fullChain, color: '#22c55e' },
+                        ].map((row, i) => (
+                          <div key={i} className="bg-[#0f1729] rounded-lg p-3 border border-slate-700/30">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: row.color }} />
+                              <span className="text-sm font-medium text-white">{row.label}</span>
+                              <span className="text-xs text-slate-400 ml-auto">{row.data.count}家 ({formatPercent(row.data.ratio)})</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div><span className="text-slate-400">ARPU</span><p className="text-white font-bold">{formatCurrency(row.data.arpu)}</p></div>
+                              <div><span className="text-slate-400">续费率</span><p className="text-white font-bold">{formatPercent(row.data.renewalRate)}</p></div>
+                              <div><span className="text-slate-400">LTV</span><p className="text-white font-bold">{formatCurrency(row.data.ltv)}</p></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 健康度维度雷达 */}
+                    <div className="bg-[#1a2332] rounded-lg p-4">
+                      <p className="text-sm font-medium text-white mb-1">客户健康度多维雷达</p>
+                      <p className="text-[10px] text-slate-500 mb-3">产品侧·效果侧·商业侧三维评估</p>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <RadarChart data={healthRadarData}>
+                          <PolarGrid stroke="#334155" />
+                          <PolarAngleAxis dataKey="dimension" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 9 }} />
+                          <Radar name="健康度" dataKey="value" stroke="#4a9eff" fill="#4a9eff" fillOpacity={0.3} />
+                          <Tooltip contentStyle={DARK_TOOLTIP_STYLE} labelStyle={{ color: '#e2e8f0' }} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-20">
+                  <BarChart3 className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+                  <p className="text-slate-400">加载数据中...</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Flow Diagram Tab
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="flow">
+            <Card><CardHeader><CardTitle className="flex items-center gap-2"><GitBranch className="w-5 h-5" />客户成功业务全链路流程图</CardTitle><CardDescription className="flex items-center gap-2">{flowData?.weekLabel}{flowData?.isDemo && <span className="text-amber-500 text-xs font-normal">· 示例数据</span>}</CardDescription></CardHeader>
+              <CardContent>{flowData && (
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between gap-2 overflow-x-auto pb-4">{flowData.nodes.map((node, i) => (
+                      <div key={node.id} className="flex items-center flex-shrink-0">
+                        <button onClick={() => setSelectedNode(node)} className={`relative p-4 rounded-xl border-2 min-w-[120px] text-center transition-all hover:scale-105 ${node.status === 'healthy' ? 'border-emerald-400 bg-emerald-50' : node.status === 'warning' ? 'border-amber-400 bg-amber-50' : 'border-red-400 bg-red-50'} ${selectedNode?.id === node.id ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}>
+                          <p className="text-sm font-bold text-slate-800">{node.label}</p>
+                          <p className="text-2xl font-bold mt-1" style={{ color: node.status === 'healthy' ? '#22c55e' : node.status === 'warning' ? '#eab308' : '#ef4444' }}>{node.count}</p>
+                          {node.lastWeek > 0 && <p className="text-xs text-slate-500 mt-1">上周: {node.lastWeek}{node.count > node.lastWeek ? ' ↑' : node.count < node.lastWeek ? ' ↓' : ' →'}</p>}
+                        </button>
+                        {i < flowData.nodes.length - 1 && <ChevronRight className="w-6 h-6 text-slate-300 flex-shrink-0 mx-1" />}
+                      </div>
+                    ))}</div>
+                    {selectedNode && (<Card className="mt-4"><CardHeader className="pb-2"><CardTitle className="text-base">{selectedNode.label} - 详情</CardTitle></CardHeader><CardContent><p className="text-sm text-slate-600">{selectedNode.details}</p><div className="flex items-center gap-2 mt-2"><Badge className={STATUS_BG[selectedNode.status]}>{selectedNode.status === 'healthy' ? '达标' : selectedNode.status === 'warning' ? '预警' : '异常'}</Badge><span className="text-xs text-slate-500">当前: {selectedNode.count} | 上周: {selectedNode.lastWeek}</span></div></CardContent></Card>)}
+                  </div>
+                  <div className="w-full lg:w-64 space-y-3">
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-100"><p className="text-xs font-semibold text-red-700 mb-1">风险预警</p>{flowData.riskAlerts.length > 0 ? flowData.riskAlerts.map((r, i) => (<p key={i} className="text-xs text-red-600">{r.metric}: {r.description}</p>)) : <p className="text-xs text-slate-500">暂无异常</p>}</div>
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-100"><p className="text-xs font-semibold text-amber-700 mb-1">核心客诉</p>{flowData.coreComplaints.map((c, i) => (<p key={i} className="text-xs text-amber-600">{maskCustomerName(c.customer)}: {c.issue}</p>))}</div>
+                    <div className="p-3 rounded-lg bg-blue-50 border border-blue-100"><p className="text-xs font-semibold text-blue-700 mb-1">团队负荷</p>{Object.entries(flowData.teamLoad).map(([name, count]) => (<div key={name} className="flex items-center justify-between mt-1"><span className="text-xs text-slate-600">{name}</span><span className="text-xs font-medium text-slate-800">{count}单</span></div>))}</div>
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100"><p className="text-xs font-semibold text-emerald-700 mb-1">健康度分布</p><div className="grid grid-cols-2 gap-1 mt-1"><span className="text-xs text-emerald-600">健康 {flowData.healthDistribution.healthy}</span><span className="text-xs text-amber-600">关注 {flowData.healthDistribution.attention}</span><span className="text-xs text-orange-600">预警 {flowData.healthDistribution.warning}</span><span className="text-xs text-red-600">危险 {flowData.healthDistribution.danger}</span></div></div>
+                  </div>
+                </div>
+              )}</CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Chat Tab
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="chat">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2">
+                <Card className="h-[650px] flex flex-col">
+                  <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-base"><Bot className="w-5 h-5 text-indigo-500" />智能体对话</CardTitle>
+                    <CardDescription>通过自然语言调教智能体、调整报告逻辑和呈现方式</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 flex flex-col min-h-0">
+                    <ScrollArea className="flex-1 mb-3 pr-2">
+                      {chatMessages.length === 0 ? (
+                        <div className="text-center py-16 space-y-3">
+                          <Sparkles className="w-10 h-10 text-indigo-300 mx-auto" />
+                          <p className="text-slate-500 text-sm">开始与智能体对话吧</p>
+                          <div className="flex flex-wrap gap-2 justify-center">
+                            {['分析客户使用深度不足的原因', '从客户成功价值视角分析续费风险', '下周报告增加多产品交叉销售分析', '决策建议要更具体，给出时间和责任人'].map(q => (
+                              <button key={q} onClick={() => setChatInput(q)} className="text-xs px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors">{q}</button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {chatMessages.map((msg, i) => (
+                            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`max-w-[80%] rounded-xl px-4 py-2.5 ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>
+                                <div className="text-xs opacity-60 mb-1">{msg.role === 'user' ? '你' : 'CSM智能体'}</div>
+                                <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                              </div>
+                            </div>
+                          ))}
+                          {chatLoading && <div className="flex justify-start"><div className="bg-slate-100 rounded-xl px-4 py-2.5"><div className="flex items-center gap-2"><RefreshCw className="w-3 h-3 animate-spin text-slate-400" /><span className="text-sm text-slate-500">思考中...</span></div></div></div>}
+                        </div>
+                      )}
+                      <div ref={chatEndRef} />
+                    </ScrollArea>
+                    <div className="flex gap-2">
+                      <Input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendChat(); } }} placeholder="输入调教指令或问题..." className="flex-1" disabled={chatLoading} />
+                      <Button onClick={handleSendChat} disabled={chatLoading || !chatInput.trim()}><Send className="w-4 h-4" /></Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="space-y-4">
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-purple-500" />对话能力</CardTitle></CardHeader>
+                  <CardContent><div className="space-y-1.5">
+                    {['调整报告逻辑与结构', '修改分析视角和深度', '增加/删除分析维度', '自定义指标阈值', '设置报告风格偏好'].map(c => (<div key={c} className="flex items-center gap-2 p-1.5 rounded bg-slate-50 text-xs text-slate-700"><CheckCircle className="w-3 h-3 text-emerald-500" />{c}</div>))}
+                  </div></CardContent>
+                </Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" />调教规则</CardTitle></CardHeader>
+                  <CardContent>
+                    {agentRules.length > 0 ? (<div className="space-y-1.5">{agentRules.slice(0, 5).map(r => (<div key={r.id} className="flex items-start gap-1.5 p-1.5 rounded bg-amber-50 text-xs text-amber-800"><Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" /><span className="flex-1">{r.ruleContent}</span></div>))}</div>)
+                      : <p className="text-xs text-slate-500">暂无调教规则，通过对话或设置页面添加</p>}
+                  </CardContent>
+                </Card>
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm">已启用技能</CardTitle></CardHeader>
+                  <CardContent><div className="space-y-1">{skills.filter(s => s.enabled).map(s => (<div key={s.skillKey} className="flex items-center gap-1.5 text-xs text-slate-600"><CheckCircle className="w-3 h-3 text-emerald-500" />{s.skillName}</div>))}</div></CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Memory Tab
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="memory">
+            <Card><CardHeader><CardTitle className="flex items-center gap-2"><Database className="w-5 h-5" />Board Memory — 历史数据</CardTitle><CardDescription>历史指标快照与未闭环事项追踪</CardDescription></CardHeader>
+              <CardContent>{dashboardData ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-lg border-2 border-blue-200 bg-blue-50"><div className="flex items-center gap-2 mb-2"><Badge className="bg-blue-600">本周</Badge><span className="text-sm font-semibold text-blue-800">{dashboardData.weekLabel}</span></div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {csData ? [
+                        { label: '产品使用率', value: formatPercent(csData.healthOverview.productSideMetrics.productUsageRate) },
+                        { label: '粉丝增长率', value: formatPercent(csData.healthOverview.effectSideMetrics.followerGrowthRate) },
+                        { label: 'NPS', value: `${csData.healthOverview.businessSideMetrics.npsScore}` },
+                        { label: '续约率', value: formatPercent(csData.healthOverview.businessSideMetrics.renewalRate) },
+                      ].map((m, i) => (
+                        <div key={i} className="text-sm"><span className="text-slate-600">{m.label}: </span><span className="font-semibold text-slate-800">{m.value}</span></div>
+                      )) : dashboardData.metrics.map(m => (<div key={m.id} className="text-sm"><span className="text-slate-600">{m.name}: </span><span className="font-semibold text-slate-800">{m.currentDisplay}</span></div>))}
+                    </div>
+                    <div className="flex gap-4 mt-2 text-sm">
+                      {csData ? (
+                        <>
+                          <span>健康 {csData.healthOverview.healthDistribution.healthy}</span>
+                          <span>关注 {csData.healthOverview.healthDistribution.attention}</span>
+                          <span>预警 {csData.healthOverview.healthDistribution.warning}</span>
+                          <span>危险 {csData.healthOverview.healthDistribution.danger}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>健康 {dashboardData.healthDistribution.healthy}</span>
+                          <span>关注 {dashboardData.healthDistribution.attention}</span>
+                          <span>预警 {dashboardData.healthDistribution.warning}</span>
+                          <span>危险 {dashboardData.healthDistribution.danger}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div><p className="text-sm font-semibold text-slate-700 mb-2">多周趋势{dashboardData?.isDemo ? '（示例）' : ''}</p><ResponsiveContainer width="100%" height={250}><LineChart data={csData ? [
+                    { week: 'W11', 使用率: 62, 续费率: 68, NPS: 52 },
+                    { week: 'W12', 使用率: 64, 续费率: 70, NPS: 54 },
+                    { week: 'W13', 使用率: csData.healthOverview.productSideMetrics.productUsageRate - 3, 续费率: csData.healthOverview.businessSideMetrics.renewalRate - 2, NPS: csData.healthOverview.businessSideMetrics.npsScore - 3 },
+                    { week: 'W14', 使用率: csData.healthOverview.productSideMetrics.productUsageRate, 续费率: csData.healthOverview.businessSideMetrics.renewalRate, NPS: csData.healthOverview.businessSideMetrics.npsScore },
+                  ] : [
+                    { week: 'W11', 培训完成率: 44, 客诉率: 3.2, 活跃率: 36 },
+                    { week: 'W12', 培训完成率: 46, 客诉率: 3.5, 活跃率: 37 },
+                    { week: 'W13', 培训完成率: 48.5, 客诉率: 3.5, 活跃率: 39.2 },
+                    { week: 'W14', 培训完成率: dashboardData.metrics[2]?.currentValue || 51, 客诉率: dashboardData.metrics[3]?.currentValue || 4.1, 活跃率: dashboardData.metrics[7]?.currentValue || 42 },
+                  ]}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="week" /><YAxis /><Tooltip /><Legend />{csData ? (<><Line type="monotone" dataKey="使用率" stroke="#6366f1" strokeWidth={2} /><Line type="monotone" dataKey="续费率" stroke="#22c55e" strokeWidth={2} /><Line type="monotone" dataKey="NPS" stroke="#f59e0b" strokeWidth={2} /></>) : (<><Line type="monotone" dataKey="培训完成率" stroke="#6366f1" strokeWidth={2} /><Line type="monotone" dataKey="客诉率" stroke="#ef4444" strokeWidth={2} /><Line type="monotone" dataKey="活跃率" stroke="#10b981" strokeWidth={2} /></>)}</LineChart></ResponsiveContainer></div>
+                  <div><p className="text-sm font-semibold text-slate-700 mb-2">未闭环事项追踪</p><div className="space-y-2">
+                    {csData ? csData.keyIssues.map((item, i) => (
+                      <div key={i} className="p-2 rounded bg-amber-50 border border-amber-100 flex items-center gap-2">
+                        <span>🔄</span>
+                        <span className="text-sm text-slate-700 flex-1">{item.issue}</span>
+                        <Badge className="bg-amber-100 text-amber-700 text-xs">{item.owner}</Badge>
+                        <Badge variant="outline" className="text-xs">{item.deadline}</Badge>
+                      </div>
+                    )) : (<>
+                      <div className="p-2 rounded bg-emerald-50 border border-emerald-100 flex items-center gap-2"><span>✅</span><span className="text-sm text-slate-700">AI匹配度优化方案已发布</span><Badge className="bg-emerald-100 text-emerald-700 text-xs">已闭环</Badge></div>
+                      <div className="p-2 rounded bg-amber-50 border border-amber-100 flex items-center gap-2"><span>🔄</span><span className="text-sm text-slate-700">培训SOP更新迭代中</span><Badge className="bg-amber-100 text-amber-700 text-xs">进行中</Badge></div>
+                    </>)}
+                  </div></div>
+                  {dashboardData.qualityReports.length > 0 && (<div><p className="text-sm font-semibold text-slate-700 mb-2">数据质量报告</p><div className="space-y-2">{dashboardData.qualityReports.map((q, i) => (<div key={i} className="p-3 rounded border border-slate-200 bg-slate-50 text-sm"><p className="font-medium text-slate-800 mb-1">{q.tableName}</p><div className="grid grid-cols-2 gap-1 text-xs text-slate-600"><span>原始行数: {q.originalRows}</span><span>清洗后: {q.cleanedRows}</span><span>过滤测试: {q.filteredTest}</span><span>去重: {q.deduplicated}</span></div></div>))}</div></div>)}
+                </div>
+              ) : <p className="text-center text-slate-500 py-10">加载中...</p>}</CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ══════════════════════════════════════════════════════════════
+              Settings Tab
+              ══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="settings">
+            <div className="max-w-3xl mx-auto space-y-4">
+              {/* Model Config */}
+              <Card><CardHeader><CardTitle className="flex items-center gap-2"><Sliders className="w-5 h-5 text-purple-500" />模型配置</CardTitle><CardDescription>配置AI分析使用的模型。推荐使用内置 SDK（免配置，开箱即用）</CardDescription></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><Label className="text-xs">Provider</Label><select value={modelConfig.provider} onChange={e => setModelConfig(p => ({ ...p, provider: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm"><option value="zai-sdk">内置 SDK（推荐，免配置）</option><option value="minimax">Minimax</option><option value="openai">OpenAI</option><option value="custom">Custom</option></select></div>
+                    <div><Label className="text-xs">模型名称</Label><Input value={modelConfig.modelName} onChange={e => setModelConfig(p => ({ ...p, modelName: e.target.value }))} className="mt-1" disabled={modelConfig.provider === 'zai-sdk'} placeholder={modelConfig.provider === 'zai-sdk' ? 'SDK 自动选择' : '模型名称'} /></div>
+                    {modelConfig.provider !== 'zai-sdk' && <><div className="md:col-span-2"><Label className="text-xs">API Key</Label><Input type="password" value={modelConfig.apiKey} onChange={e => setModelConfig(p => ({ ...p, apiKey: e.target.value }))} className="mt-1" placeholder="sk-..." /></div>
+                    <div className="md:col-span-2"><Label className="text-xs">Base URL</Label><Input value={modelConfig.baseUrl} onChange={e => setModelConfig(p => ({ ...p, baseUrl: e.target.value }))} className="mt-1" /></div></>}
+                    <div><Label className="text-xs">Temperature ({modelConfig.temperature})</Label><Input type="range" min="0" max="1" step="0.1" value={modelConfig.temperature} onChange={e => setModelConfig(p => ({ ...p, temperature: parseFloat(e.target.value) }))} className="mt-1 w-full" /></div>
+                    <div><Label className="text-xs">Max Tokens</Label><Input type="number" value={modelConfig.maxTokens} onChange={e => setModelConfig(p => ({ ...p, maxTokens: parseInt(e.target.value) || 4096 }))} className="mt-1" /></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={handleSaveModelConfig} className="flex-1"><Zap className="w-4 h-4 mr-2" />保存配置</Button>
+                    <Button variant="outline" onClick={handleTestModel} disabled={modelTestLoading}>{modelTestLoading ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Play className="w-4 h-4 mr-2" />}测试连接</Button>
+                  </div>
+                  {modelTestResult && (<div className={`p-3 rounded-lg text-sm ${modelTestResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{modelTestResult.message}</div>)}
+                </CardContent>
+              </Card>
+
+              {/* Skill Config */}
+              <Card><CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" />技能配置</CardTitle><CardDescription>启用或禁用智能体分析技能，控制报告生成内容</CardDescription></CardHeader>
+                <CardContent>
+                  <div className="space-y-2">{skills.map(s => (
+                    <div key={s.skillKey} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white transition-colors">
+                      <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${s.enabled ? 'bg-emerald-500' : 'bg-slate-300'}`} /><div><p className="text-sm font-medium text-slate-800">{s.skillName}</p><p className="text-xs text-slate-500">Key: {s.skillKey}</p></div></div>
+                      <button onClick={() => handleToggleSkill(s.skillKey, !s.enabled)} className="flex items-center">{s.enabled ? <ToggleRight className="w-8 h-5 text-emerald-500" /> : <ToggleLeft className="w-8 h-5 text-slate-400" />}</button>
+                    </div>
+                  ))}</div>
+                </CardContent>
+              </Card>
+
+              {/* Agent Rules (NL Tuning) */}
+              <Card><CardHeader><CardTitle className="flex items-center gap-2"><Bot className="w-5 h-5 text-indigo-500" />智能体调教</CardTitle><CardDescription>通过规则对智能体进行自然语言调教，影响报告生成逻辑</CardDescription></CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input value={newRule} onChange={e => setNewRule(e.target.value)} placeholder="输入调教规则，如：分析要从客户成功价值视角出发" className="flex-1" onKeyDown={e => { if (e.key === 'Enter') handleAddRule(); }} />
+                    <select value={newRuleCategory} onChange={e => setNewRuleCategory(e.target.value)} className="px-2 py-2 border rounded-lg text-xs"><option value="general">通用</option><option value="analysis">分析</option><option value="report">报告</option><option value="format">格式</option></select>
+                    <Button onClick={handleAddRule} size="sm"><Plus className="w-4 h-4 mr-1" />添加</Button>
+                  </div>
+                  {agentRules.length > 0 ? (
+                    <div className="space-y-2">{agentRules.map(r => (
+                      <div key={r.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
+                        <div className="flex-1"><p className="text-sm text-slate-800">{r.ruleContent}</p><div className="flex gap-2 mt-1"><Badge variant="outline" className="text-xs">{r.category}</Badge><Badge variant="outline" className="text-xs">{r.source === 'chat' ? '对话生成' : r.source === 'manual' ? '手动添加' : '系统'}</Badge></div></div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteRule(r.id)}><Trash2 className="w-4 h-4 text-red-400" /></Button>
+                      </div>
+                    ))}</div>
+                  ) : <p className="text-center text-sm text-slate-500 py-6">暂无调教规则，添加规则或通过对话自动生成</p>}
+                </CardContent>
+              </Card>
+
+              {/* WeChat Work Config */}
+              <Card><CardHeader><CardTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-green-500" />企业微信机器人</CardTitle></CardHeader>
+                <CardContent><div className="grid grid-cols-1 gap-2 text-sm">
+                  <div className="flex justify-between"><span className="text-slate-500">企业 ID</span><span className="font-mono text-slate-700">ww8bd429f5b618a57e</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">Bot ID</span><span className="font-mono text-slate-700">aibfn23p9PF...0N3</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">方案</span><Badge>智能机器人方案</Badge></div>
+                </div></CardContent>
+              </Card>
+
+              {/* Quick Actions */}
+              <Card><CardHeader><CardTitle className="text-base">快捷操作</CardTitle></CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  <Button variant="outline" className="justify-start" onClick={handleNotify}><Bell className="w-4 h-4 mr-2" />手动推送企业微信通知</Button>
+                  <Button variant="outline" className="justify-start" onClick={() => { loadDashboard(); loadFlowData(); toast.success('数据已刷新'); }}><RefreshCw className="w-4 h-4 mr-2" />重新加载所有数据</Button>
+                  <Button variant="outline" className="justify-start" onClick={handleGenerateReport} disabled={reportLoading}><Brain className="w-4 h-4 mr-2" />{reportLoading ? 'AI正在生成周报...' : '手动触发生成周报'}</Button>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </main>
+
+      {/* ── Footer ── */}
+      <footer className="mt-auto border-t border-slate-200 bg-white py-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 text-center text-xs text-slate-400">
+          AIMI 客户成功价值分析系统 v3 | Powered by AIMI & 企业微信
+        </div>
+      </footer>
+    </div>
+  );
+}
