@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Note: output: "standalone" is needed for production deployment (build.sh)
+  // but should be commented out for dev mode. The platform runs "bun run dev" automatically.
+  // output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
   },
