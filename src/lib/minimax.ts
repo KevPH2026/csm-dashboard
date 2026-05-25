@@ -12,15 +12,47 @@ export interface LLMConfig {
   maxTokens: number;
 }
 
-// Default to zai-sdk which is guaranteed to work in this environment
-export const DEFAULT_CONFIG: LLMConfig = {
-  provider: 'zai-sdk',
-  apiKey: '',
-  baseUrl: '',
-  modelName: '',
-  temperature: 0.3,
-  maxTokens: 4096,
-};
+// Check if we have custom LLM env vars configured (Vercel/serverless)
+function getEnvLLMConfig(): Partial<LLMConfig> | null {
+  const apiKey = process.env.LLM_API_KEY;
+  const baseUrl = process.env.LLM_BASE_URL;
+  const modelName = process.env.LLM_MODEL_NAME;
+
+  if (apiKey && baseUrl && modelName) {
+    return {
+      provider: 'custom',
+      apiKey,
+      baseUrl,
+      modelName,
+    };
+  }
+  return null;
+}
+
+// Default config: prefer env vars, then zai-sdk
+function getDefaultConfig(): LLMConfig {
+  const envConfig = getEnvLLMConfig();
+  if (envConfig) {
+    return {
+      provider: envConfig.provider || 'custom',
+      apiKey: envConfig.apiKey || '',
+      baseUrl: envConfig.baseUrl || '',
+      modelName: envConfig.modelName || '',
+      temperature: 0.3,
+      maxTokens: 4096,
+    };
+  }
+  return {
+    provider: 'zai-sdk',
+    apiKey: '',
+    baseUrl: '',
+    modelName: '',
+    temperature: 0.3,
+    maxTokens: 4096,
+  };
+}
+
+export const DEFAULT_CONFIG: LLMConfig = getDefaultConfig();
 
 export interface MinimaxMessage {
   role: 'system' | 'user' | 'assistant';
@@ -29,15 +61,29 @@ export interface MinimaxMessage {
 
 // Singleton ZAI SDK instance
 let zaiInstance: ZAI | null = null;
+let zaiSdkAvailable: boolean | null = null;
 
 async function getZAI(): Promise<ZAI> {
   if (!zaiInstance) {
     zaiInstance = await ZAI.create();
+    zaiSdkAvailable = true;
   }
   return zaiInstance;
 }
 
-// Get config from localStorage (client) or use default (server)
+// Check if z-ai-web-dev-sdk is available (might not be on Vercel)
+async function isSDKAvailable(): Promise<boolean> {
+  if (zaiSdkAvailable !== null) return zaiSdkAvailable;
+  try {
+    await getZAI();
+    return true;
+  } catch {
+    zaiSdkAvailable = false;
+    return false;
+  }
+}
+
+// Get config from localStorage (client) or env vars / default (server)
 export function getLLMConfig(): LLMConfig {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('csm_model_config');
@@ -106,39 +152,42 @@ export async function callLLM(
   const temp = temperature ?? fullConfig.temperature;
   const maxTokens = fullConfig.maxTokens;
 
-  // If provider is zai-sdk or no API key configured, use SDK
+  // If custom API is configured (apiKey + baseUrl + modelName all present), use it directly
+  if (fullConfig.apiKey && fullConfig.baseUrl && fullConfig.modelName) {
+    try {
+      return await callLLMViaAPI(messages, fullConfig, temp, maxTokens);
+    } catch (apiError) {
+      console.error('Custom API call failed, trying SDK fallback:', apiError);
+      // Fallback to SDK if available
+      if (await isSDKAvailable()) {
+        try {
+          return await callLLMViaSDK(messages, temp, maxTokens);
+        } catch (sdkError) {
+          console.error('SDK fallback also failed:', sdkError);
+          throw new Error(`自定义 API 和 SDK 均调用失败。API: ${apiError instanceof Error ? apiError.message : '未知错误'}`);
+        }
+      }
+      throw apiError;
+    }
+  }
+
+  // No custom API configured, use z-ai-sdk
   if (fullConfig.provider === 'zai-sdk' || !fullConfig.apiKey) {
+    // Check if SDK is available first
+    if (!(await isSDKAvailable())) {
+      // SDK not available and no custom API configured
+      throw new Error('AI 功能未配置。请在"模型配置"页面设置 API Key、接口地址和模型名称，或设置环境变量 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL_NAME。');
+    }
     try {
       return await callLLMViaSDK(messages, temp, maxTokens);
     } catch (sdkError) {
       console.error('SDK LLM call failed:', sdkError);
-      // If user also configured a custom API, try that as fallback
-      if (fullConfig.provider !== 'zai-sdk' && fullConfig.apiKey && fullConfig.baseUrl) {
-        console.log('Falling back to custom API...');
-        try {
-          return await callLLMViaAPI(messages, fullConfig, temp, maxTokens);
-        } catch (apiError) {
-          console.error('Fallback API also failed:', apiError);
-          throw new Error(`SDK 和自定义 API 均调用失败。SDK: ${sdkError instanceof Error ? sdkError.message : '未知错误'}`);
-        }
-      }
       throw sdkError;
     }
   }
 
-  // Use custom API endpoint
-  try {
-    return await callLLMViaAPI(messages, fullConfig, temp, maxTokens);
-  } catch (apiError) {
-    console.error('Custom API call failed, trying SDK fallback:', apiError);
-    // Fallback to SDK if custom API fails
-    try {
-      return await callLLMViaSDK(messages, temp, maxTokens);
-    } catch (sdkError) {
-      console.error('SDK fallback also failed:', sdkError);
-      throw new Error(`自定义 API 和 SDK 均调用失败。API: ${apiError instanceof Error ? apiError.message : '未知错误'}`);
-    }
-  }
+  // Fallback: shouldn't reach here, but just in case
+  throw new Error('无法调用 LLM：未配置 API 且 SDK 不可用');
 }
 
 // Backward compatible: callMinimax uses callLLM with default config
@@ -153,59 +202,59 @@ export async function callMinimax(
 export async function testModelConnection(config: LLMConfig): Promise<{ success: boolean; message: string; latency?: number }> {
   const start = Date.now();
 
-  // Test zai-sdk provider
-  if (config.provider === 'zai-sdk' || !config.apiKey) {
+  // Test custom API endpoint (if configured)
+  if (config.apiKey && config.baseUrl && config.modelName) {
     try {
-      const zai = await getZAI();
-      const completion = await zai.chat.completions.create({
-        messages: [{ role: 'user', content: '你好，请回复"连接成功"' }],
-        temperature: 0.1,
-        max_tokens: 50,
+      const response = await fetch(config.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.modelName,
+          messages: [
+            { role: 'user', content: '你好，请回复"连接成功"' },
+          ],
+          temperature: 0.1,
+          max_tokens: 50,
+        }),
       });
+
       const latency = Date.now() - start;
-      const content = completion.choices?.[0]?.message?.content;
-      if (content) {
-        return { success: true, message: `SDK模型响应正常，延迟 ${latency}ms`, latency };
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return { success: false, message: `HTTP ${response.status}: ${errorText.substring(0, 200)}` };
       }
-      return { success: false, message: 'SDK模型返回内容为空' };
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) {
+        return { success: true, message: `模型响应正常，延迟 ${latency}ms`, latency };
+      }
+      return { success: false, message: '模型返回内容为空' };
     } catch (error) {
-      return { success: false, message: `SDK连接失败: ${error instanceof Error ? error.message : '未知错误'}` };
+      return { success: false, message: `连接失败: ${error instanceof Error ? error.message : '未知错误'}` };
     }
   }
 
-  // Test custom API endpoint
+  // Test zai-sdk provider
   try {
-    const response = await fetch(config.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.modelName,
-        messages: [
-          { role: 'user', content: '你好，请回复"连接成功"' },
-        ],
-        temperature: 0.1,
-        max_tokens: 50,
-      }),
+    const zai = await getZAI();
+    const completion = await zai.chat.completions.create({
+      messages: [{ role: 'user', content: '你好，请回复"连接成功"' }],
+      temperature: 0.1,
+      max_tokens: 50,
     });
-
     const latency = Date.now() - start;
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return { success: false, message: `HTTP ${response.status}: ${errorText.substring(0, 200)}` };
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = completion.choices?.[0]?.message?.content;
     if (content) {
-      return { success: true, message: `模型响应正常，延迟 ${latency}ms`, latency };
+      return { success: true, message: `SDK模型响应正常，延迟 ${latency}ms`, latency };
     }
-    return { success: false, message: '模型返回内容为空' };
+    return { success: false, message: 'SDK模型返回内容为空' };
   } catch (error) {
-    return { success: false, message: `连接失败: ${error instanceof Error ? error.message : '未知错误'}` };
+    return { success: false, message: `SDK连接失败: ${error instanceof Error ? error.message : '未知错误'}。请在"模型配置"页面配置自定义 API。` };
   }
 }
 
