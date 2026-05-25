@@ -379,6 +379,7 @@ export default function Home() {
     setLoading(true);
     try {
       const res = await fetch('/api/dashboard');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setWeekLabel(data.weekLabel || '');
       // Always set demo data
@@ -389,7 +390,27 @@ export default function Home() {
       if (data.realData) {
         setRealData({ ...data.realData, weekLabel: data.weekLabel });
       }
-    } catch { toast.error('加载仪表盘数据失败'); }
+    } catch {
+      // API unavailable (e.g. GitHub Pages static mode) — fallback to built-in data
+      console.log('[Dashboard] API unavailable, using built-in data');
+      const staticRealCSData = generateRealDashboardData();
+      const fallbackState: DashboardState = {
+        metrics: [],
+        healthDistribution: staticRealCSData.healthOverview.healthDistribution,
+        anomalies: [],
+        orderAnalysis: { bySource: {}, byProductType: {}, byVersion: {}, byCSM: {} },
+        usageAnalysis: { byContentType: {}, byPlatform: {}, aiVsNonAI: { ai: { count: 0, exposure: 0, engagement: 0 }, nonAI: { count: 0, exposure: 0, engagement: 0 } }, topActiveCustomers: [] },
+        dangerDetails: [],
+        qualityReports: [],
+        weekLabel: 'W15 (2026-04-06 - 2026-04-12)',
+        csValueData: staticRealCSData,
+        isDemo: false,
+      };
+      setRealData(fallbackState);
+      setForceDemoMode(false);
+      setUseStaticRealData(true);
+      setWeekLabel(fallbackState.weekLabel);
+    }
     finally { setLoading(false); }
   }, []);
 

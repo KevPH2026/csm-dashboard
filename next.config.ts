@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
+const isStaticExport = process.env.NEXT_STATIC_EXPORT === '1';
+
 const nextConfig: NextConfig = {
+  // GitHub Pages static export mode
+  output: isStaticExport ? 'export' : undefined,
+  basePath: isStaticExport ? '/csm-dashboard' : undefined,
+  // Disable image optimization for static export (not supported)
+  images: isStaticExport ? { unoptimized: true } : undefined,
   typescript: {
     ignoreBuildErrors: true,
   },
