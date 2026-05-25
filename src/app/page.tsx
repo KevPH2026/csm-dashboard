@@ -903,19 +903,19 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex flex-col">
       {/* ── Header ── */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm">
-              <Heart className="w-5 h-5 text-white" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm">
+              <Heart className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">AIMI 客户成功价值分析系统</h1>
-              <p className="text-xs text-slate-500">价值驱动 · 增长可量化</p>
+              <h1 className="text-sm sm:text-lg font-bold text-slate-900 tracking-tight leading-tight">客户成功价值分析系统</h1>
+              <p className="text-[10px] sm:text-xs text-slate-500">价值驱动 · 增长可量化</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 text-xs">
-              <span className="text-slate-500">数据:</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] sm:text-xs">
+              <span className="text-slate-500 hidden sm:inline">数据:</span>
               <button
                 onClick={() => { setForceDemoMode(true); setUseStaticRealData(false); }}
                 className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${isDisplayingDemo ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'text-slate-500 hover:bg-slate-200'}`}
@@ -956,7 +956,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
       {/* ── Main Content ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex-1">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-8 mb-4">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 mb-4">
             <TabsTrigger value="dashboard" className="text-xs"><Activity className="w-3 h-3 sm:mr-1" />仪表盘</TabsTrigger>
             <TabsTrigger value="upload" className="text-xs"><Database className="w-3 h-3 sm:mr-1" />数据源</TabsTrigger>
             <TabsTrigger value="report" className="text-xs"><FileText className="w-3 h-3 sm:mr-1" />报告</TabsTrigger>
@@ -1339,7 +1339,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
 
                     {/* 分产品线客户数 */}
                     <p className="text-sm font-semibold text-slate-700 mb-3">分产品线客户分布</p>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {[
                         { name: 'AIMI', count: Math.round(csData.healthOverview.totalCustomers * 0.55), color: PRODUCT_COLORS.aimi, newAdd: Math.round(csData.healthOverview.totalCustomers * 0.55 * 0.09) },
                         { name: '广告', count: Math.round(csData.healthOverview.totalCustomers * 0.40), color: PRODUCT_COLORS.ads, newAdd: Math.round(csData.healthOverview.totalCustomers * 0.40 * 0.07) },
@@ -1639,7 +1639,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                               <p className="text-xs text-indigo-700 mt-0.5">含AIMI的客户占比 <strong className="text-lg">{formatPercent(csData.customerComboDetail.aimiCustomerRatio)}</strong>，交叉销售是客户留存和价值最大化的关键策略</p>
                             </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-3 mt-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                             <div className="text-center p-2.5 rounded-lg bg-white/70 border border-indigo-100">
                               <p className="text-[10px] text-slate-500">含AIMI客户续费率</p>
                               <p className="text-base font-bold text-indigo-700">{formatPercent(csData.customerComboDetail.aimiAds.renewalRate ?? 0)}</p>
@@ -1774,7 +1774,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                           </div>
 
                           {/* 分组合详情 */}
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             {arrData.map((row, i) => (
                               <div key={i} className={`p-4 rounded-xl ${row.bgColor} border border-slate-200`}>
                                 <div className="flex items-center gap-2 mb-2">
@@ -1828,7 +1828,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                       const totalEngagement = adv.count * adv.avgEngagement + gro.count * gro.avgEngagement + bas.count * bas.avgEngagement;
                       const formatBigNumber = (v: number) => v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v.toLocaleString();
                       return (
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           {[
                             { label: '发帖数', value: totalPosts.toLocaleString(), icon: <FileText className="w-4 h-4" /> },
                             { label: '曝光数', value: formatBigNumber(totalExposure), icon: <Eye className="w-4 h-4" /> },
@@ -1911,7 +1911,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                             </div>
                           </div>
                           {/* 漏斗转化总览 */}
-                          <div className="grid grid-cols-3 gap-3 mt-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                             {[
                               { label: 'Onboarding→账号绑定', value: journey.steps[1]?.conversionRate, suffix: '%' },
                               { label: '账号绑定→首次发帖', value: journey.steps[2]?.conversionRate, suffix: '%' },
@@ -1994,7 +1994,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                           <p className="text-xs font-bold text-violet-700 mb-3 flex items-center gap-1.5">
                             <Target className="w-3.5 h-3.5" />产品侧指标（AIMI）
                           </p>
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                               <p className="text-xs text-slate-500 mb-0.5">产品使用率</p>
                               <p className="text-lg font-bold text-violet-700">{formatPercent(csData.healthOverview.productSideMetrics.productUsageRate)}</p>
@@ -2015,7 +2015,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                           <p className="text-xs font-bold text-emerald-700 mb-3 flex items-center gap-1.5">
                             <TrendingUp className="w-3.5 h-3.5" />效果侧指标（AIMI）
                           </p>
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                               <p className="text-xs text-slate-500 mb-0.5">粉丝增长率</p>
                               <p className="text-lg font-bold text-emerald-700">{formatPercent(csData.healthOverview.effectSideMetrics.followerGrowthRate)}</p>
@@ -2035,7 +2035,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                           <p className="text-xs font-bold text-amber-700 mb-3 flex items-center gap-1.5">
                             <DollarSign className="w-3.5 h-3.5" />商业侧指标
                           </p>
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                               <p className="text-xs text-slate-500 mb-0.5">客户满意度(NPS)</p>
                               <p className="text-lg font-bold text-amber-700">{csData.healthOverview.businessSideMetrics.npsScore}</p>
@@ -2099,7 +2099,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                                 <span className="text-sm font-bold" style={{ color: tier.color }}>{tier.label}</span>
                                 <span className="text-xs font-bold text-slate-600">{tier.data.count}家</span>
                               </div>
-                              <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
                                 <div>
                                   <p className="text-[10px] text-slate-500">月均发帖</p>
                                   <p className="text-sm font-bold text-slate-800">{tier.data.avgPosts}</p>
@@ -2461,7 +2461,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                               续费率 {formatPercent(csData.renewalChurn.aimi.renewalRate)}
                             </Badge>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                             <div className="text-center p-1.5 rounded bg-slate-50">
                               <span className="text-slate-500">到期续费</span>
                               <p className="font-bold text-slate-800">{csData.renewalChurn.aimi.renewed}/{csData.renewalChurn.aimi.upForRenewal}</p>
@@ -2495,7 +2495,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                               续费率 {formatPercent(csData.renewalChurn.ads.renewalRate)}
                             </Badge>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                             <div className="text-center p-1.5 rounded bg-slate-50">
                               <span className="text-slate-500">到期续费</span>
                               <p className="font-bold text-slate-800">{csData.renewalChurn.ads.renewed}/{csData.renewalChurn.ads.upForRenewal}</p>
@@ -2537,7 +2537,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                           <div className="p-2 rounded-lg bg-yellow-50 border border-yellow-200 mb-2">
                             <p className="text-xs text-yellow-700 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />独立站暂未建立续费跟踪体系</p>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                             <div className="text-center p-1.5 rounded bg-emerald-50">
                               <span className="text-slate-500">活跃率</span>
                               <p className="font-bold text-emerald-700">{formatPercent(csData.siteLifecycle?.activeRate ?? 62)}</p>
@@ -2570,7 +2570,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                               续费率 {formatPercent(csData.renewalChurn.overall.renewalRate)}
                             </Badge>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                             <div className="text-center p-1.5 rounded bg-slate-50">
                               <span className="text-slate-500">到期续费</span>
                               <p className="font-bold text-slate-800">{csData.renewalChurn.overall.renewed}/{csData.renewalChurn.overall.upForRenewal}</p>
@@ -3085,7 +3085,7 @@ ${JSON.stringify(csData, null, 2).substring(0, 6000)}
                               <span className="text-sm font-medium text-white">{row.label}</span>
                               <span className="text-xs text-slate-400 ml-auto">{row.data.count}家 ({formatPercent(row.data.ratio)})</span>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                               <div><span className="text-slate-400">ARPU</span><p className="text-white font-bold">{formatCurrency(row.data.arpu)}</p></div>
                               <div><span className="text-slate-400">续费率</span><p className="text-white font-bold">{formatPercent(row.data.renewalRate)}</p></div>
                               <div><span className="text-slate-400">LTV</span><p className="text-white font-bold">{formatCurrency(row.data.ltv)}</p></div>
